@@ -43,32 +43,32 @@ pub fn main() !void {
     gl.makeProcTableCurrent(&gl_procs);
     defer gl.makeProcTableCurrent(null);
 
-    //1.1 Vertex and fragment shaders
-    //1.2 VAO and VBO
-    //1.3 gl.DrawArrays
+    //1.1 Vertex and fragment shaders [x]
+    //1.2 VAO and VBO [x]
+    //1.3 gl.DrawArrays [x]
     //
-    //2.1 Shader Encapsulation (utility to compile, link, and validate shaders)
-    //2.2 Mesh Abstraction (utility to create VAOs and VBOs)
+    //2.1 Shader Encapsulation (utility to compile, link, and validate shaders) []
+    //2.2 Mesh Abstraction (utility to create VAOs and VBOs) []
     //
-    //3.1 Indexed Rendering support (gl.DrawElements)
+    //3.1 Indexed Rendering support (gl.DrawElements) []
     //
-    //4.1 .obj parser -> Ignore textures and normals for now
-    //4.2 store vertices in a struct
+    //4.1 .obj parser -> Ignore textures and normals for now []
+    //4.2 store vertices in a struct []
     //
-    //5.1 parsed data buffer -> VAO, VBO, IBO -> upload to GPU
-    //5.2 Vertex attributes -> attribute pointers (position, normal, texcoord)
+    //5.1 parsed data buffer -> VAO, VBO, IBO -> upload to GPU []
+    //5.2 Vertex attributes -> attribute pointers (position, normal, texcoord) []
     //
-    //6.1 Multiple objects -> multiple VAOs, VBOs, IBOs
-    //6.2 Render each object separately
+    //6.1 Multiple objects -> multiple VAOs, VBOs, IBOs []
+    //6.2 Render each object separately []
     //
-    //7.1 Parse texture coordinates
-    //7.2 Load textures + bind textures to texture units
+    //7.1 Parse texture coordinates []
+    //7.2 Load textures + bind textures to texture units []
     //
-    //8.1 Extract and buffer normal vectors
-    //8.2 Basic lighting
+    //8.1 Extract and buffer normal vectors []
+    //8.2 Basic lighting []
     //
-    //9.1 Parse .mtl files and load material properties
-    //9.2 Normal mapping/PBR -> advanced shading techniques
+    //9.1 Parse .mtl files and load material properties []
+    //9.2 Normal mapping/PBR -> advanced shading techniques []
 
     // Vertex struct
     const Vertex = extern struct { position: [3]f32, color: [3]f32 };
@@ -76,7 +76,7 @@ pub fn main() !void {
     // example triangle vertices
     const triangleVertices = [_]Vertex{
         .{ .position = [_]f32{ -0.5, -0.5, 0.0 }, .color = .{ 0, 0, 1 } }, // left
-        .{ .position = [_]f32{ 0.5, -0.5, 0.0 }, .color = .{ 1, 1, 1 } }, //right
+        .{ .position = [_]f32{ 0.5, -0.5, 0.0 }, .color = .{ 1, 1, 1 } }, // right
         .{ .position = [_]f32{ 0.0, 0.5, 0.0 }, .color = .{ 1, 0, 1 } }, // top
     };
 
