@@ -47,10 +47,10 @@ pub fn main() !void {
     //1.2 VAO and VBO [x]
     //1.3 gl.DrawArrays [x]
     //
-    //2.1 Shader Encapsulation (utility to compile, link, and validate shaders) []
-    //2.2 Mesh Abstraction (utility to create VAOs and VBOs) []
+    //2.1 Shader Encapsulation (utility to compile, link, and validate shaders) [x]
+    //2.2 Mesh Abstraction (utility to create VAOs and VBOs) [x]
     //
-    //3.1 Indexed Rendering support (gl.DrawElements) []
+    //3.1 Indexed Rendering support (gl.DrawElements) [x]
     //
     //4.1 .obj parser -> Ignore textures and normals for now []
     //4.2 store vertices in a struct []
@@ -75,10 +75,14 @@ pub fn main() !void {
 
     // example triangle vertices
     const triangleVertices = [_]Vertex{
-        .{ .position = [_]f32{ -0.5, -0.5, 0.0 }, .color = .{ 0, 0, 1 } }, // left
-        .{ .position = [_]f32{ 0.5, -0.5, 0.0 }, .color = .{ 1, 1, 1 } }, // right
-        .{ .position = [_]f32{ 0.0, 0.5, 0.0 }, .color = .{ 1, 0, 1 } }, // top
+        .{ .position = .{ -0.5, -0.5, 0.0 }, .color = .{ 0.0, 1.0, 1.0 } }, // bottom left
+        .{ .position = .{ 0.5, -0.5, 0.0 }, .color = .{ 0.0, 1.0, 0.0 } }, // bottom right
+        .{ .position = .{ 0.5, 0.5, 0.0 }, .color = .{ 1.0, 0.0, 1.0 } }, // top right
+        .{ .position = .{ -0.5, 0.5, 0.0 }, .color = .{ 1.0, 1.0, 0.0 } }, // top left
     };
+
+    // [_] = array size at compile time
+    const indices = [_]u32{ 0, 1, 2, 2, 3, 0 };
 
     // get shader from external file
     const allocator = std.heap.page_allocator;
@@ -143,26 +147,33 @@ pub fn main() !void {
     defer gl.DeleteBuffers(1, (&vbo)[0..1]);
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
     defer gl.BindBuffer(gl.ARRAY_BUFFER, 0);
+    gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(triangleVertices)), &triangleVertices, gl.STATIC_DRAW); // VBO upload
 
-    // VBO upload
-    gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(triangleVertices)), &triangleVertices, gl.STATIC_DRAW);
+    // EBO
+    var ebo: c_uint = undefined;
+    gl.GenBuffers(1, (&ebo)[0..1]);
+    defer gl.DeleteBuffers(1, (&ebo)[0..1]);
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+    defer gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
 
     // Vertex attributes
     const stride = @sizeOf(Vertex);
-
+    // first attribute for position
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0);
     gl.EnableVertexAttribArray(0);
+    // second attribute for color
     gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, @sizeOf([3]f32));
     gl.EnableVertexAttribArray(1);
 
     // Main Loop
     while (!window.shouldClose()) {
-        gl.ClearColor(1.0, 0.0, 0.0, 1.0);
+        gl.ClearColor(1.0, 1.0, 1.0, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT);
 
         gl.UseProgram(shaderProgram);
         gl.BindVertexArray(vao);
-        gl.DrawArrays(gl.TRIANGLES, 0, triangleVertices.len);
+        gl.DrawElements(gl.TRIANGLES, indices.len, gl.UNSIGNED_INT, 0);
 
         window.swapBuffers();
         glfw.pollEvents();
