@@ -4,6 +4,7 @@
     .minimum_zig_version = "0.13.0",
     .paths = .{
         "src",
+        "libs",
         "zig-out",
         "build.zig",
         "build.zig.zon",
@@ -17,5 +18,6 @@
             .url = "git+https://github.com/castholm/zigglgen#1c901bef6d312ef1814b8fce3c5a9e9e8e61ac2d",
             .hash = "12209d8a018832bee15d9da29a12fa753d89b56cd843cdf1f39501546c6467e38ba1",
         },
+        .zmath = .{ .path = "./libs/zmath" },
     },
 }

@@ -12,7 +12,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Use mach-glfw
+    // zmath
+    const zmath = b.dependency("zmath", .{});
+    exe.root_module.addImport("zmath", zmath.module("root"));
+
+    // mach-glfw
     const glfw_dep = b.dependency("mach_glfw", .{
         .target = target,
         .optimize = optimize,

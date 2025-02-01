@@ -1,6 +1,15 @@
 const std = @import("std");
+const math = @import("std").math;
+const zmath = @import("zmath");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
+
+// Mouse state
+var isDragging: bool = false;
+var lastMouseX: f32 = 0.0;
+var lastMouseY: f32 = 0.0;
+var rotationX: f32 = 0.0;
+var rotationY: f32 = 0.0;
 
 var gl_procs: gl.ProcTable = undefined;
 
@@ -17,8 +26,8 @@ pub fn main() !void {
     }
     defer glfw.terminate();
 
-    // Create our window
-    const window = glfw.Window.create(640, 480, "Hello!", null, null, .{
+    // Create window
+    const window: glfw.Window = glfw.Window.create(640, 480, "Hello!", null, null, .{
         .context_version_major = 4,
         .context_version_minor = 5,
         .opengl_profile = .opengl_core_profile,
@@ -52,37 +61,74 @@ pub fn main() !void {
     //
     //3.1 Indexed Rendering support (gl.DrawElements) [x]
     //
-    //4.1 .obj parser -> Ignore textures and normals for now []
-    //4.2 store vertices in a struct []
+    //4 Mouse based Rotation []
+    //4.1 Capture Mouse Events []
+    //4.2 Rotation Angles Update []
+    //4.3 Apply Rotation []
     //
-    //5.1 parsed data buffer -> VAO, VBO, IBO -> upload to GPU []
-    //5.2 Vertex attributes -> attribute pointers (position, normal, texcoord) []
+    //5.1 .obj parser -> Ignore textures and normals for now []
+    //5.2 store vertices in a struct []
     //
-    //6.1 Multiple objects -> multiple VAOs, VBOs, IBOs []
-    //6.2 Render each object separately []
+    //6.1 parsed data buffer -> VAO, VBO, IBO -> upload to GPU []
+    //6.2 Vertex attributes -> attribute pointers (position, normal, texcoord) []
     //
-    //7.1 Parse texture coordinates []
-    //7.2 Load textures + bind textures to texture units []
+    //7.1 Multiple objects -> multiple VAOs, VBOs, IBOs []
+    //7.2 Render each object separately []
     //
-    //8.1 Extract and buffer normal vectors []
-    //8.2 Basic lighting []
+    //8.1 Parse texture coordinates []
+    //8.2 Load textures + bind textures to texture units []
     //
-    //9.1 Parse .mtl files and load material properties []
-    //9.2 Normal mapping/PBR -> advanced shading techniques []
+    //9.1 Extract and buffer normal vectors []
+    //9.2 Basic lighting []
+    //
+    //10.1 Parse .mtl files and load material properties []
+    //10.2 Normal mapping/PBR -> advanced shading techniques []
 
     // Vertex struct
     const Vertex = extern struct { position: [3]f32, color: [3]f32 };
 
-    // example triangle vertices
-    const triangleVertices = [_]Vertex{
-        .{ .position = .{ -0.5, -0.5, 0.0 }, .color = .{ 0.0, 1.0, 1.0 } }, // bottom left
-        .{ .position = .{ 0.5, -0.5, 0.0 }, .color = .{ 0.0, 1.0, 0.0 } }, // bottom right
-        .{ .position = .{ 0.5, 0.5, 0.0 }, .color = .{ 1.0, 0.0, 1.0 } }, // top right
-        .{ .position = .{ -0.5, 0.5, 0.0 }, .color = .{ 1.0, 1.0, 0.0 } }, // top left
+    // zig fmt: off
+    const vertices = [_]Vertex{
+        // Front face
+        .{ .position = .{ -0.5,     -0.5,   0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Bottom-left
+        .{ .position = .{ 0.5,      -0.5,   0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Bottom-right
+        .{ .position = .{ 0.5,      0.5,    0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Top-right
+        .{ .position = .{ -0.5,     0.5,    0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Top-left
+
+        // Back face
+        .{ .position = .{ -0.5,     -0.5,   0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-left
+        .{ .position = .{ 0.5,      -0.5,   0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-right
+        .{ .position = .{ 0.5,      0.5,    0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-right
+        .{ .position = .{ -0.5,     0.5,    0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-left
     };
 
     // [_] = array size at compile time
-    const indices = [_]u32{ 0, 1, 2, 2, 3, 0 };
+    const indices = [_]u32{
+        // Front face
+        0, 1, 2,
+        2, 3, 0,
+
+        // Right face
+        1, 5, 6,
+        6, 2, 1,
+
+        // Back face
+        5, 4, 7,
+        7, 6, 5,
+
+        // Left face
+        4, 0, 3,
+        3, 7, 4,
+
+        // Top face
+        3, 2, 6,
+        6, 7, 3,
+
+        // Bottom face
+        4, 5, 1,
+        1, 0, 4,
+    };
+    // zig fmt: on
 
     // get shader from external file
     const allocator = std.heap.page_allocator;
@@ -147,7 +193,7 @@ pub fn main() !void {
     defer gl.DeleteBuffers(1, (&vbo)[0..1]);
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
     defer gl.BindBuffer(gl.ARRAY_BUFFER, 0);
-    gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(triangleVertices)), &triangleVertices, gl.STATIC_DRAW); // VBO upload
+    gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW); // VBO upload
 
     // EBO
     var ebo: c_uint = undefined;
@@ -166,17 +212,43 @@ pub fn main() !void {
     gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, @sizeOf([3]f32));
     gl.EnableVertexAttribArray(1);
 
+    // Depth testing
+    gl.Enable(gl.DEPTH_TEST);
+
+    // MVP uniform location
+    //const mvpLocation = gl.GetUniformLocation(shaderProgram, "uMVP");
+
+    // Mouse events
+    window.setMouseButtonCallback(mouseClickCallback);
+
     // Main Loop
     while (!window.shouldClose()) {
         gl.ClearColor(1.0, 1.0, 1.0, 1.0);
-        gl.Clear(gl.COLOR_BUFFER_BIT);
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        gl.UseProgram(shaderProgram);
+        // MVP Matrix
+        const object_to_world = zmath.rotationY(rotationY);
+        const world_to_view = zmath.lookAtRh(
+            zmath.f32x4(3.0, 3.0, 3.0, 1.0), // eye position
+            zmath.f32x4(0.0, 0.0, 0.0, 1.0), // focus point
+            zmath.f32x4(0.0, 1.0, 0.0, 0.0), // up direction ('w' coord is zero because this is a vector not a point)
+        );
+        // `perspectiveFovRhGl` produces Z values in [-1.0, 1.0] range (Vulkan app should use `perspectiveFovRh`)
+        const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, 800 / 600, 0.1, 20.0);
+
+        const object_to_view = zmath.mul(object_to_world, world_to_view);
+        const object_to_clip = zmath.mul(object_to_view, view_to_clip);
+
+        // Transposition is needed because GLSL uses column-major matrices by default
+        gl.UniformMatrix4fv(0, 1, gl.TRUE, &object_to_clip[0][0]);
+
+        // Draw object
+        //gl.UseProgram(shaderProgram);
         gl.BindVertexArray(vao);
         gl.DrawElements(gl.TRIANGLES, indices.len, gl.UNSIGNED_INT, 0);
 
         window.swapBuffers();
-        glfw.pollEvents();
+        glfw.pollEvents(); // Mouse Callback
     }
 }
 
@@ -217,4 +289,27 @@ fn linkProgram(vertexShader: gl.uint, fragmentShader: gl.uint) !c_uint {
 
     std.log.info("Shaders linked successfully", .{});
     return program;
+}
+
+fn mouseClickCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
+    if (button == glfw.MouseButton.left and mods.shift == true and (action == glfw.Action.press or action == glfw.Action.release)) { //and action == glfw.Action.press
+        var mouseState = glfw.Window.getCursorPos(window);
+        _ = &mouseState;
+
+        if (!isDragging) {
+            std.log.debug("NOT Dragging!", .{});
+            isDragging = true;
+            lastMouseX = @floatCast(mouseState.xpos);
+            lastMouseY = @floatCast(mouseState.ypos);
+        } else {
+            std.log.debug("Dragging!", .{});
+            const deltaX = mouseState.xpos - lastMouseX;
+            const deltaY = mouseState.ypos - lastMouseY;
+            rotationX += @floatCast(deltaY * 0.01);
+            rotationY += @floatCast(deltaX * 0.01);
+            lastMouseX = @floatCast(mouseState.xpos);
+            lastMouseY = @floatCast(mouseState.ypos);
+        }
+        isDragging = false;
+    }
 }
