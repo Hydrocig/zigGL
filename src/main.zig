@@ -96,10 +96,10 @@ pub fn main() !void {
         .{ .position = .{ -0.5,     0.5,    0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Top-left
 
         // Back face
-        .{ .position = .{ -0.5,     -0.5,   0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-left
-        .{ .position = .{ 0.5,      -0.5,   0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-right
-        .{ .position = .{ 0.5,      0.5,    0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-right
-        .{ .position = .{ -0.5,     0.5,    0.0 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-left
+        .{ .position = .{ -0.5,     -0.5,   -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-left
+        .{ .position = .{ 0.5,      -0.5,   -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-right
+        .{ .position = .{ 0.5,      0.5,    -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-right
+        .{ .position = .{ -0.5,     0.5,    -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-left
     };
 
     // [_] = array size at compile time
@@ -226,6 +226,25 @@ pub fn main() !void {
         gl.ClearColor(1.0, 1.0, 1.0, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+        // Handle mouse movement
+        if (isDragging) {
+            var mouseX: f64 = 0.0;
+            var mouseY: f64 = 0.0;
+
+            var mousePosition = glfw.Window.getCursorPos(window);
+            _ = &mousePosition;
+            mouseX = @floatCast(mousePosition.xpos);
+            mouseY = @floatCast(mousePosition.ypos);
+
+            const deltaX = mouseX - lastMouseX;
+            const deltaY = mouseY - lastMouseY;
+            rotationX += @floatCast(deltaY * 0.01);
+            rotationY += @floatCast(deltaX * 0.01);
+
+            lastMouseX = @floatCast(mouseX);
+            lastMouseY = @floatCast(mouseY);
+        }
+
         // MVP Matrix
         const object_to_world = zmath.rotationY(rotationY);
         const world_to_view = zmath.lookAtRh(
@@ -292,24 +311,15 @@ fn linkProgram(vertexShader: gl.uint, fragmentShader: gl.uint) !c_uint {
 }
 
 fn mouseClickCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
-    if (button == glfw.MouseButton.left and mods.shift == true and (action == glfw.Action.press or action == glfw.Action.release)) { //and action == glfw.Action.press
-        var mouseState = glfw.Window.getCursorPos(window);
-        _ = &mouseState;
-
-        if (!isDragging) {
-            std.log.debug("NOT Dragging!", .{});
+    if (button == glfw.MouseButton.left and mods.shift == true) {
+        if (action == glfw.Action.press) {
             isDragging = true;
-            lastMouseX = @floatCast(mouseState.xpos);
-            lastMouseY = @floatCast(mouseState.ypos);
-        } else {
-            std.log.debug("Dragging!", .{});
-            const deltaX = mouseState.xpos - lastMouseX;
-            const deltaY = mouseState.ypos - lastMouseY;
-            rotationX += @floatCast(deltaY * 0.01);
-            rotationY += @floatCast(deltaX * 0.01);
-            lastMouseX = @floatCast(mouseState.xpos);
-            lastMouseY = @floatCast(mouseState.ypos);
+            var mousePosition = glfw.Window.getCursorPos(window);
+            _ = &mousePosition;
+            lastMouseX = @floatCast(mousePosition.xpos);
+            lastMouseY = @floatCast(mousePosition.ypos);
+        } else if (action == glfw.Action.release) {
+            isDragging = false;
         }
-        isDragging = false;
     }
 }
