@@ -259,7 +259,7 @@ pub fn main() !void {
         const object_to_clip = zmath.mul(object_to_view, view_to_clip);
 
         // Transposition is needed because GLSL uses column-major matrices by default
-        gl.UniformMatrix4fv(0, 1, gl.TRUE, &object_to_clip[0][0]);
+        gl.UniformMatrix4fv(0, 1, gl.FALSE, &object_to_clip[0][0]);
 
         // Draw object
         //gl.UseProgram(shaderProgram);
