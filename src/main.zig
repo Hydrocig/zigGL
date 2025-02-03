@@ -246,15 +246,17 @@ pub fn main() !void {
         }
 
         // MVP Matrix
-        const object_to_world = zmath.rotationY(rotationY);
+        const object_to_worldX = zmath.rotationX(rotationX);
+        const object_to_worldY = zmath.rotationY(rotationY);
         const world_to_view = zmath.lookAtRh(
             zmath.f32x4(3.0, 3.0, 3.0, 1.0), // eye position
             zmath.f32x4(0.0, 0.0, 0.0, 1.0), // focus point
             zmath.f32x4(0.0, 1.0, 0.0, 0.0), // up direction ('w' coord is zero because this is a vector not a point)
         );
-        // `perspectiveFovRhGl` produces Z values in [-1.0, 1.0] range (Vulkan app should use `perspectiveFovRh`)
+        // `perspectiveFovRhGl` produces Z values in [-1.0, 1.0] range
         const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, 800 / 600, 0.1, 20.0);
 
+        const object_to_world = zmath.mul(object_to_worldX, object_to_worldY);
         const object_to_view = zmath.mul(object_to_world, world_to_view);
         const object_to_clip = zmath.mul(object_to_view, view_to_clip);
 
