@@ -11,6 +11,14 @@ var lastMouseY: f32 = 0.0;
 var rotationX: f32 = 0.0;
 var rotationY: f32 = 0.0;
 
+// Keys state
+var pressingRelevantKey: bool = false;
+var pressingX: bool = false;
+var pressingY: bool = false;
+var pressingZ: bool = false;
+
+var offset: zmath.F32x4 = .{ 0.0, 0.0, 0.0, 0.0 };
+
 var gl_procs: gl.ProcTable = undefined;
 
 /// Default GLFW error handling callback
@@ -220,6 +228,8 @@ pub fn main() !void {
 
     // Mouse events
     window.setMouseButtonCallback(mouseClickCallback);
+    // Key events
+    window.setKeyCallback(keyPressCallback);
 
     // Main Loop
     while (!window.shouldClose()) {
@@ -245,9 +255,45 @@ pub fn main() !void {
             lastMouseY = @floatCast(mouseY);
         }
 
+        // Handle keyboard input
+        if (pressingRelevantKey) {
+            var mouseX: f64 = 0.0;
+            var mouseY: f64 = 0.0;
+
+            var mousePosition = glfw.Window.getCursorPos(window);
+            _ = &mousePosition;
+
+            mouseX = mousePosition.xpos;
+            mouseY = mousePosition.ypos;
+
+            const deltaX: f64 = mouseX - lastMouseX;
+            const deltaY: f64 = mouseY - lastMouseY;
+
+            if (pressingX) {
+                offset[0] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
+            } else if (pressingY) {
+                offset[2] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
+            } else if (pressingZ) {
+                offset[1] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
+            } else {
+                pressingRelevantKey = false;
+                pressingX = false;
+                pressingY = false;
+                pressingZ = false;
+            }
+        }
+
+        // Translation Matrix
+        const translationMatrix: zmath.Mat = .{
+            zmath.F32x4{ 1.0, 0.0, 0.0, 0.0 },
+            zmath.F32x4{ 0.0, 1.0, 0.0, 0.0 },
+            zmath.F32x4{ 0.0, 0.0, 1.0, 0.0 },
+            zmath.F32x4{ offset[0], offset[1], offset[2], 1.0 },
+        };
+
         // MVP Matrix
-        const object_to_worldX = zmath.rotationX(rotationX);
-        const object_to_worldY = zmath.rotationY(rotationY);
+        const rotation_object_to_world_X = zmath.rotationX(rotationX);
+        const rotation_object_to_world_Y = zmath.rotationY(rotationY);
         const world_to_view = zmath.lookAtRh(
             zmath.f32x4(3.0, 3.0, 3.0, 1.0), // eye position
             zmath.f32x4(0.0, 0.0, 0.0, 1.0), // focus point
@@ -256,7 +302,8 @@ pub fn main() !void {
         // `perspectiveFovRhGl` produces Z values in [-1.0, 1.0] range
         const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, 800 / 600, 0.1, 20.0);
 
-        const object_to_world = zmath.mul(object_to_worldX, object_to_worldY);
+        const rotation_object_to_world = zmath.mul(rotation_object_to_world_X, rotation_object_to_world_Y);
+        const object_to_world = zmath.mul(translationMatrix, rotation_object_to_world);
         const object_to_view = zmath.mul(object_to_world, world_to_view);
         const object_to_clip = zmath.mul(object_to_view, view_to_clip);
 
@@ -269,7 +316,7 @@ pub fn main() !void {
         gl.DrawElements(gl.TRIANGLES, indices.len, gl.UNSIGNED_INT, 0);
 
         window.swapBuffers();
-        glfw.pollEvents(); // Mouse Callback
+        glfw.pollEvents();
     }
 }
 
@@ -313,6 +360,7 @@ fn linkProgram(vertexShader: gl.uint, fragmentShader: gl.uint) !c_uint {
 }
 
 fn mouseClickCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
+    pressingRelevantKey = false;
     if (button == glfw.MouseButton.left and mods.shift == true) {
         if (action == glfw.Action.press) {
             isDragging = true;
@@ -322,6 +370,47 @@ fn mouseClickCallback(window: glfw.Window, button: glfw.MouseButton, action: glf
             lastMouseY = @floatCast(mousePosition.ypos);
         } else if (action == glfw.Action.release) {
             isDragging = false;
+        }
+    }
+}
+
+fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.Action, mods: glfw.Mods) void {
+    std.log.debug("SCANCODE: {d}", .{scancode});
+    if (action == glfw.Action.press and (mods.shift == false and mods.control == false)) {
+        var currentCursorPos = window.getCursorPos();
+        _ = &currentCursorPos;
+
+        lastMouseX = @floatCast(currentCursorPos.xpos);
+        lastMouseY = @floatCast(currentCursorPos.ypos);
+
+        switch (key) {
+            glfw.Key.x => {
+                pressingRelevantKey = true;
+                pressingX = !pressingX;
+
+                pressingY = false;
+                pressingZ = false;
+            },
+            glfw.Key.y => {
+                pressingRelevantKey = true;
+                pressingY = !pressingY;
+
+                pressingX = false;
+                pressingZ = false;
+            },
+            glfw.Key.z => {
+                pressingRelevantKey = true;
+                pressingZ = !pressingZ;
+
+                pressingY = false;
+                pressingX = false;
+            },
+            else => {
+                pressingRelevantKey = false;
+                pressingX = false;
+                pressingY = false;
+                pressingZ = false;
+            },
         }
     }
 }
