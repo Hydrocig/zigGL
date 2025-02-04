@@ -4,6 +4,10 @@ const zmath = @import("zmath");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
 
+// Window settings
+var windowMinSizeX: i32 = 640;
+var windowMinSizeY: i32 = 480;
+
 // Mouse state
 var isDragging: bool = false;
 var lastMouseX: f32 = 0.0;
@@ -16,7 +20,6 @@ var pressingRelevantKey: bool = false;
 var pressingX: bool = false;
 var pressingY: bool = false;
 var pressingZ: bool = false;
-
 var offset: zmath.F32x4 = .{ 0.0, 0.0, 0.0, 0.0 };
 
 var gl_procs: gl.ProcTable = undefined;
@@ -69,10 +72,10 @@ pub fn main() !void {
     //
     //3.1 Indexed Rendering support (gl.DrawElements) [x]
     //
-    //4 Mouse based Rotation []
-    //4.1 Capture Mouse Events []
-    //4.2 Rotation Angles Update []
-    //4.3 Apply Rotation []
+    //4 Mouse based Rotation [x]
+    //4.1 Capture Mouse Events [x]
+    //4.2 Rotation Angles Update [x]
+    //4.3 Apply Rotation [x]
     //
     //5.1 .obj parser -> Ignore textures and normals for now []
     //5.2 store vertices in a struct []
@@ -162,7 +165,7 @@ pub fn main() !void {
         return error.ShaderCompilationFailed;
     }
 
-    std.log.debug("Vertex shader compiled!", .{});
+    std.log.info("Vertex shader compiled!", .{});
 
     // Compile fragment shader
     const fragmentShader: c_uint = gl.CreateShader(gl.FRAGMENT_SHADER);
@@ -180,7 +183,7 @@ pub fn main() !void {
         return error.ShaderCompilationFailed;
     }
 
-    std.log.debug("Fragment shader compiled!", .{});
+    std.log.info("Fragment shader compiled!", .{});
 
     // Link shaders
     const shaderProgram: gl.uint = try linkProgram(vertexShader, fragmentShader);
@@ -230,6 +233,8 @@ pub fn main() !void {
     window.setMouseButtonCallback(mouseClickCallback);
     // Key events
     window.setKeyCallback(keyPressCallback);
+    // Window events
+    window.setSizeCallback(windowSizeCallback);
 
     // Main Loop
     while (!window.shouldClose()) {
@@ -413,4 +418,15 @@ fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: g
             },
         }
     }
+}
+
+fn windowSizeCallback(window: glfw.Window, xscale: i32, yscale: i32) void {
+    window.focus();
+
+    gl.Viewport(0, 0, xscale, yscale);
+
+    const aspect_ratio: f32 = @as(f32, @floatFromInt(xscale)) / @as(f32, @floatFromInt(yscale));
+    const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, aspect_ratio, 0.1, 20.0);
+
+    gl.UniformMatrix4fv(1, 1, gl.FALSE, &view_to_clip[0][0]);
 }
