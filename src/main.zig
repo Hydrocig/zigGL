@@ -16,11 +16,14 @@ var rotationX: f32 = 0.0;
 var rotationY: f32 = 0.0;
 
 // Keys state
-var pressingRelevantKey: bool = false;
-var pressingX: bool = false;
-var pressingY: bool = false;
-var pressingZ: bool = false;
 var offset: zmath.F32x4 = .{ 0.0, 0.0, 0.0, 0.0 };
+const RelevantKeys = union(enum) {
+    none,
+    x,
+    y,
+    z,
+};
+var currentKey: RelevantKeys = .none;
 
 var gl_procs: gl.ProcTable = undefined;
 
@@ -261,7 +264,7 @@ pub fn main() !void {
         }
 
         // Handle keyboard input
-        if (pressingRelevantKey) {
+        if (currentKey != .none) {
             var mouseX: f64 = 0.0;
             var mouseY: f64 = 0.0;
 
@@ -274,17 +277,17 @@ pub fn main() !void {
             const deltaX: f64 = mouseX - lastMouseX;
             const deltaY: f64 = mouseY - lastMouseY;
 
-            if (pressingX) {
-                offset[0] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
-            } else if (pressingY) {
-                offset[2] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
-            } else if (pressingZ) {
-                offset[1] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
-            } else {
-                pressingRelevantKey = false;
-                pressingX = false;
-                pressingY = false;
-                pressingZ = false;
+            switch (currentKey) {
+                .x => {
+                    offset[0] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
+                },
+                .y => {
+                    offset[1] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
+                },
+                .z => {
+                    offset[2] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
+                },
+                else => {},
             }
         }
 
@@ -365,7 +368,7 @@ fn linkProgram(vertexShader: gl.uint, fragmentShader: gl.uint) !c_uint {
 }
 
 fn mouseClickCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
-    pressingRelevantKey = false;
+    currentKey = .none;
     if (button == glfw.MouseButton.left and mods.shift == true) {
         if (action == glfw.Action.press) {
             isDragging = true;
@@ -390,31 +393,16 @@ fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: g
 
         switch (key) {
             glfw.Key.x => {
-                pressingRelevantKey = true;
-                pressingX = !pressingX;
-
-                pressingY = false;
-                pressingZ = false;
+                currentKey = if (currentKey == .x) .none else .x;
             },
             glfw.Key.y => {
-                pressingRelevantKey = true;
-                pressingY = !pressingY;
-
-                pressingX = false;
-                pressingZ = false;
+                currentKey = if (currentKey == .y) .none else .y;
             },
             glfw.Key.z => {
-                pressingRelevantKey = true;
-                pressingZ = !pressingZ;
-
-                pressingY = false;
-                pressingX = false;
+                currentKey = if (currentKey == .z) .none else .z;
             },
             else => {
-                pressingRelevantKey = false;
-                pressingX = false;
-                pressingY = false;
-                pressingZ = false;
+                currentKey = .none;
             },
         }
     }
