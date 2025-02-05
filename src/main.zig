@@ -4,9 +4,9 @@ const zmath = @import("zmath");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
 
-// Window settings
-var windowMinSizeX: i32 = 640;
-var windowMinSizeY: i32 = 480;
+// Window
+var xAspect: f32 = 800.0;
+var yAspect: f32 = 800.0;
 
 // Mouse state
 var isDragging: bool = false;
@@ -38,7 +38,7 @@ pub fn main() !void {
     defer glfw.terminate();
 
     // Create window
-    const window: glfw.Window = glfw.Window.create(640, 480, "Hello!", null, null, .{
+    const window: glfw.Window = glfw.Window.create(@intFromFloat(xAspect), @intFromFloat(yAspect), "Hello!", null, null, .{
         .context_version_major = 4,
         .context_version_minor = 5,
         .opengl_profile = .opengl_core_profile,
@@ -234,7 +234,7 @@ pub fn main() !void {
     // Key events
     window.setKeyCallback(keyPressCallback);
     // Window events
-    window.setSizeCallback(windowSizeCallback);
+    window.setFramebufferSizeCallback(windowSizeCallback);
 
     // Main Loop
     while (!window.shouldClose()) {
@@ -305,7 +305,7 @@ pub fn main() !void {
             zmath.f32x4(0.0, 1.0, 0.0, 0.0), // up direction ('w' coord is zero because this is a vector not a point)
         );
         // `perspectiveFovRhGl` produces Z values in [-1.0, 1.0] range
-        const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, 800 / 600, 0.1, 20.0);
+        const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, xAspect / yAspect, 0.1, 20.0);
 
         const rotation_object_to_world = zmath.mul(rotation_object_to_world_X, rotation_object_to_world_Y);
         const object_to_world = zmath.mul(translationMatrix, rotation_object_to_world);
@@ -420,13 +420,20 @@ fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: g
     }
 }
 
-fn windowSizeCallback(window: glfw.Window, xscale: i32, yscale: i32) void {
+fn windowSizeCallback(window: glfw.Window, width: u32, height: u32) void {
     window.focus();
 
-    gl.Viewport(0, 0, xscale, yscale);
+    xAspect = @floatFromInt(width);
+    yAspect = @floatFromInt(height);
 
-    const aspect_ratio: f32 = @as(f32, @floatFromInt(xscale)) / @as(f32, @floatFromInt(yscale));
+    if (height == 0) return;
+
+    gl.Viewport(0, 0, @intCast(width), @intCast(height));
+
+    // aspect ratio calculation
+    const aspect_ratio: f32 = @as(f32, @floatFromInt(width)) / @as(f32, @floatFromInt(height));
+
+    // Update projection matrix
     const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, aspect_ratio, 0.1, 20.0);
-
     gl.UniformMatrix4fv(1, 1, gl.FALSE, &view_to_clip[0][0]);
 }
