@@ -15,6 +15,9 @@ var lastMouseY: f32 = 0.0;
 var rotationX: f32 = 0.0;
 var rotationY: f32 = 0.0;
 
+// Mouse Scroll
+var scrollOffsetY: f64 = 0.0;
+
 // Keys state
 var offset: zmath.F32x4 = .{ 0.0, 0.0, 0.0, 0.0 };
 const RelevantKeys = union(enum) {
@@ -242,6 +245,8 @@ pub fn main() !void {
     window.setKeyCallback(keyPressCallback);
     // Window events
     window.setFramebufferSizeCallback(windowSizeCallback);
+    // Mouse scroll
+    window.setScrollCallback(mouseScrollCallback);
 
     // Main Loop
     while (!window.shouldClose()) {
@@ -292,7 +297,7 @@ pub fn main() !void {
                     offset[2] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
                 },
                 .s => {
-                    translationMatrixScale = @floatCast(zmath.max(deltaX, deltaY) * 0.01);
+                    translationMatrixScale = @floatCast(zmath.max(zmath.max(deltaX, deltaY), scrollOffsetY) * 0.01);
                     if (translationMatrixScale < 0) {
                         translationMatrixScale = math.pow(f32, translationMatrixScale, 2);
                     }
@@ -430,7 +435,8 @@ fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: g
 }
 
 fn windowSizeCallback(window: glfw.Window, width: u32, height: u32) void {
-    window.focus();
+    //window.focus();
+    _ = &window;
 
     xAspect = @floatFromInt(width);
     yAspect = @floatFromInt(height);
@@ -445,4 +451,18 @@ fn windowSizeCallback(window: glfw.Window, width: u32, height: u32) void {
     // Update projection matrix
     const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, aspect_ratio, 0.1, 20.0);
     gl.UniformMatrix4fv(1, 1, gl.FALSE, &view_to_clip[0][0]);
+}
+
+fn mouseScrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
+    _ = &xoffset;
+    _ = &window;
+
+    std.log.debug("SCOLL local offset: {d}", .{yoffset});
+    std.log.debug("SCOLL global offset: {d}", .{scrollOffsetY});
+
+    scrollOffsetY += yoffset;
+
+    if (currentKey == .none) {
+        scrollOffsetY = 0.0;
+    }
 }
