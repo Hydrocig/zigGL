@@ -123,6 +123,18 @@ pub fn main() !void {
         .{ .position = .{ -0.5,     0.5,    -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-left
     };
 
+    const axisVertices = [_]Vertex{
+        // X axis (red)
+        .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 1.0, 0.0, 0.0} },
+        .{ .position = .{1.0, 0.0, 0.0}, .color = .{ 1.0, 0.0, 0.0} },
+        // Y axis (green)
+        .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 0.0, 1.0, 0.0} },
+        .{ .position = .{0.0, 1.0, 0.0}, .color = .{ 0.0, 1.0, 0.0} },
+        // Z axis (blue)
+        .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 0.0, 0.0, 1.0} },
+        .{ .position = .{0.0, 0.0, 1.0}, .color = .{ 0.0, 0.0, 1.0} },
+    };
+
     // [_] = array size at compile time
     const indices = [_]u32{
         // Front face
@@ -208,7 +220,14 @@ pub fn main() !void {
     gl.BindVertexArray(vao);
     defer gl.BindVertexArray(0);
 
-    // VBO
+    // VBOs
+    var axisVBO: gl.uint = 0;
+    gl.GenBuffers(1, (&axisVBO)[0..1]);
+    defer gl.DeleteBuffers(1, (&axisVBO)[0..1]);
+    gl.BindBuffer(gl.ARRAY_BUFFER, axisVBO);
+    defer gl.BindBuffer(gl.ARRAY_BUFFER, 0);
+    gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(axisVertices)), &axisVertices, gl.STATIC_DRAW);
+
     var vbo: c_uint = undefined;
     gl.GenBuffers(1, (&vbo)[0..1]);
     defer gl.DeleteBuffers(1, (&vbo)[0..1]);
@@ -235,9 +254,6 @@ pub fn main() !void {
 
     // Depth testing
     gl.Enable(gl.DEPTH_TEST);
-
-    // MVP uniform location
-    //const mvpLocation = gl.GetUniformLocation(shaderProgram, "uMVP");
 
     // Mouse events
     window.setMouseButtonCallback(mouseClickCallback);
@@ -342,9 +358,34 @@ pub fn main() !void {
         gl.UniformMatrix4fv(0, 1, gl.FALSE, &object_to_clip[0][0]);
 
         // Draw object
-        //gl.UseProgram(shaderProgram);
+        gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 0);
+        gl.EnableVertexAttribArray(0);
+        gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 3 * @sizeOf(f32));
+        gl.EnableVertexAttribArray(1);
         gl.BindVertexArray(vao);
         gl.DrawElements(gl.TRIANGLES, indices.len, gl.UNSIGNED_INT, 0);
+
+        // MVP Matrix for axis
+        const axes_to_world = zmath.Mat{
+            zmath.F32x4{ 1.0, 0.0, 0.0, 0.0 },
+            zmath.F32x4{ 0.0, 1.0, 0.0, 0.0 },
+            zmath.F32x4{ 0.0, 0.0, 1.0, 0.0 },
+            zmath.F32x4{ 0.0, 0.0, 0.0, 1.0 },
+        };
+        const axes_to_view = zmath.mul(axes_to_world, world_to_view);
+        const axes_to_clip = zmath.mul(axes_to_view, view_to_clip);
+
+        gl.UniformMatrix4fv(0, 1, gl.FALSE, &axes_to_clip[0][0]);
+
+        // Draw axes
+        gl.BindBuffer(gl.ARRAY_BUFFER, axisVBO);
+        gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 0);
+        gl.EnableVertexAttribArray(0);
+        gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 3 * @sizeOf(f32));
+        gl.EnableVertexAttribArray(1);
+        gl.BindVertexArray(vao);
+        gl.DrawArrays(gl.LINES, 0, 6);
 
         window.swapBuffers();
         glfw.pollEvents();
@@ -456,9 +497,6 @@ fn windowSizeCallback(window: glfw.Window, width: u32, height: u32) void {
 fn mouseScrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
     _ = &xoffset;
     _ = &window;
-
-    std.log.debug("SCOLL local offset: {d}", .{yoffset});
-    std.log.debug("SCOLL global offset: {d}", .{scrollOffsetY});
 
     scrollOffsetY += yoffset;
 
