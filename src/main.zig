@@ -22,8 +22,12 @@ const RelevantKeys = union(enum) {
     x,
     y,
     z,
+    s,
 };
 var currentKey: RelevantKeys = .none;
+
+// scaling
+var translationMatrixScale: f32 = 1.0;
 
 var gl_procs: gl.ProcTable = undefined;
 
@@ -287,9 +291,23 @@ pub fn main() !void {
                 .z => {
                     offset[2] = @floatCast(zmath.max(deltaX, deltaY) * 0.1);
                 },
+                .s => {
+                    translationMatrixScale = @floatCast(zmath.max(deltaX, deltaY) * 0.01);
+                    if (translationMatrixScale < 0) {
+                        translationMatrixScale = math.pow(f32, translationMatrixScale, 2);
+                    }
+                },
                 else => {},
             }
         }
+
+        // Translation scaling Matrix
+        const translationMatrixScalingMatrix: [4]@Vector(4, f32) = zmath.Mat{
+            zmath.F32x4{ translationMatrixScale, 0.0, 0.0, 0.0 },
+            zmath.F32x4{ 0.0, translationMatrixScale, 0.0, 0.0 },
+            zmath.F32x4{ 0.0, 0.0, translationMatrixScale, 0.0 },
+            zmath.F32x4{ 0.0, 0.0, 0.0, 1.0 },
+        };
 
         // Translation Matrix
         const translationMatrix: zmath.Mat = .{
@@ -311,7 +329,7 @@ pub fn main() !void {
         const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, xAspect / yAspect, 0.1, 20.0);
 
         const rotation_object_to_world = zmath.mul(rotation_object_to_world_X, rotation_object_to_world_Y);
-        const object_to_world = zmath.mul(translationMatrix, rotation_object_to_world);
+        const object_to_world = zmath.mul(zmath.mul(translationMatrix, translationMatrixScalingMatrix), rotation_object_to_world);
         const object_to_view = zmath.mul(object_to_world, world_to_view);
         const object_to_clip = zmath.mul(object_to_view, view_to_clip);
 
@@ -400,6 +418,9 @@ fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: g
             },
             glfw.Key.z => {
                 currentKey = if (currentKey == .z) .none else .z;
+            },
+            glfw.Key.s => {
+                currentKey = if (currentKey == .s) .none else .s;
             },
             else => {
                 currentKey = .none;
