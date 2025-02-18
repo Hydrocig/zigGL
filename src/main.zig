@@ -3,6 +3,8 @@ const math = @import("std").math;
 const zmath = @import("zmath");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
+const objectLoader = @import("./objectLoader.zig");
+const slicedStr = @import("slicedString.zig");
 
 // Window
 var xAspect: f32 = 800.0;
@@ -162,6 +164,11 @@ pub fn main() !void {
         1, 0, 4,
     };
     // zig fmt: on
+
+    // Load Object
+    const loadedObject: objectLoader.objectStruct = try objectLoader.load();
+    const loadedObjectName: []const u8 = slicedStr.asSlice(loadedObject.slicedName);
+    std.log.debug("name: {s}", .{loadedObjectName});
 
     // get shader from external file
     const allocator = std.heap.page_allocator;
