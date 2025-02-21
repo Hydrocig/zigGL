@@ -1,12 +1,8 @@
 #version 450 core
 layout (location = 0) in vec3 aPos;
-layout(location = 1) in vec3 aColor;
-  
-out vec3 vertexColor;
 
-uniform mat4 uMVP;
+layout(location = 0) uniform mat4 mvp;
 
-void main(){
-    gl_Position = uMVP * vec4(aPos, 1.0);
-    vertexColor = aColor;
+void main() {
+    gl_Position = mvp * vec4(aPos, 1.0);
 }

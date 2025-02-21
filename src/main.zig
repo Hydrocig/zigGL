@@ -111,20 +111,6 @@ pub fn main() !void {
     const Vertex = extern struct { position: [3]f32, color: [3]f32 };
 
     // zig fmt: off
-    const vertices = [_]Vertex{
-        // Front face
-        .{ .position = .{ -0.5,     -0.5,   0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Bottom-left
-        .{ .position = .{ 0.5,      -0.5,   0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Bottom-right
-        .{ .position = .{ 0.5,      0.5,    0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Top-right
-        .{ .position = .{ -0.5,     0.5,    0.5 }, .color = .{ 0.0,     1.0,    0.0 } }, // Top-left
-
-        // Back face
-        .{ .position = .{ -0.5,     -0.5,   -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-left
-        .{ .position = .{ 0.5,      -0.5,   -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Bottom-right
-        .{ .position = .{ 0.5,      0.5,    -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-right
-        .{ .position = .{ -0.5,     0.5,    -0.5 }, .color = .{ 1.0,     0.0,    0.0 } }, // Top-left
-    };
-
     const axisVertices = [_]Vertex{
         // X axis (red)
         .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 1.0, 0.0, 0.0} },
@@ -136,42 +122,20 @@ pub fn main() !void {
         .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 0.0, 0.0, 1.0} },
         .{ .position = .{0.0, 0.0, 1.0}, .color = .{ 0.0, 0.0, 1.0} },
     };
-
-    // [_] = array size at compile time
-    const indices = [_]u32{
-        // Front face
-        0, 1, 2,
-        2, 3, 0,
-
-        // Right face
-        1, 5, 6,
-        6, 2, 1,
-
-        // Back face
-        5, 4, 7,
-        7, 6, 5,
-
-        // Left face
-        4, 0, 3,
-        3, 7, 4,
-
-        // Top face
-        3, 2, 6,
-        6, 7, 3,
-
-        // Bottom face
-        4, 5, 1,
-        1, 0, 4,
-    };
     // zig fmt: on
 
     // Load Object
     const loadedObject: objectLoader.objectStruct = try objectLoader.load();
-    const loadedObjectName: []const u8 = slicedStr.asSlice(loadedObject.slicedName);
-    std.log.debug("name: {s}", .{loadedObjectName});
+
+    var allocator = std.heap.page_allocator;
+
+    try convertFacesToTriangles(loadedObject.EBO, loadedObject.eboSize, &allocator);
+    const triangleIndices = try convertFacesToTriangles(loadedObject.EBO[0..@as(usize, @intCast(loadedObject.eboSize))], allocator);
+    const triangleCount = triangleIndices.len;
+
+    const objectVAO: u32 = createObject(loadedObject);
 
     // get shader from external file
-    const allocator = std.heap.page_allocator;
     const vertexShaderSource: []const u8 = try std.fs.cwd().readFileAlloc(allocator, "src/vertex.shader.glsl", 1024 * 1024);
     defer allocator.free(vertexShaderSource);
     const fragmentShaderSource: []const u8 = try std.fs.cwd().readFileAlloc(allocator, "src/fragment.shader.glsl", 1024 * 1024);
@@ -220,35 +184,20 @@ pub fn main() !void {
 
     gl.UseProgram(shaderProgram);
 
-    // VAO
+    // axis VAO
     var vao: c_uint = undefined;
     gl.GenVertexArrays(1, (&vao)[0..1]);
     defer gl.DeleteVertexArrays(1, (&vao)[0..1]);
     gl.BindVertexArray(vao);
     defer gl.BindVertexArray(0);
 
-    // VBOs
+    // axis VBOs
     var axisVBO: gl.uint = 0;
     gl.GenBuffers(1, (&axisVBO)[0..1]);
     defer gl.DeleteBuffers(1, (&axisVBO)[0..1]);
     gl.BindBuffer(gl.ARRAY_BUFFER, axisVBO);
     defer gl.BindBuffer(gl.ARRAY_BUFFER, 0);
     gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(axisVertices)), &axisVertices, gl.STATIC_DRAW);
-
-    var vbo: c_uint = undefined;
-    gl.GenBuffers(1, (&vbo)[0..1]);
-    defer gl.DeleteBuffers(1, (&vbo)[0..1]);
-    gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
-    defer gl.BindBuffer(gl.ARRAY_BUFFER, 0);
-    gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW); // VBO upload
-
-    // EBO
-    var ebo: c_uint = undefined;
-    gl.GenBuffers(1, (&ebo)[0..1]);
-    defer gl.DeleteBuffers(1, (&ebo)[0..1]);
-    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
-    defer gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
-    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
 
     // Vertex attributes
     const stride = @sizeOf(Vertex);
@@ -349,7 +298,7 @@ pub fn main() !void {
         const rotation_object_to_world_X = zmath.rotationX(rotationX);
         const rotation_object_to_world_Y = zmath.rotationY(rotationY);
         const world_to_view = zmath.lookAtRh(
-            zmath.f32x4(3.0, 3.0, 3.0, 1.0), // eye position
+            zmath.f32x4(0.0, 0.0, 3.0, 1.0), // eye position
             zmath.f32x4(0.0, 0.0, 0.0, 1.0), // focus point
             zmath.f32x4(0.0, 1.0, 0.0, 0.0), // up direction ('w' coord is zero because this is a vector not a point)
         );
@@ -365,15 +314,10 @@ pub fn main() !void {
         gl.UniformMatrix4fv(0, 1, gl.FALSE, &object_to_clip[0][0]);
 
         // Draw object
-        gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
-        gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 0);
-        gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 3 * @sizeOf(f32));
-        gl.EnableVertexAttribArray(1);
-        gl.BindVertexArray(vao);
-        gl.DrawElements(gl.TRIANGLES, indices.len, gl.UNSIGNED_INT, 0);
+        gl.BindVertexArray(objectVAO);
+        gl.DrawElements(gl.TRIANGLES, triangleCount, gl.UNSIGNED_INT, 0);
 
-        // MVP Matrix for axis
+        // MVP Matrix for axes
         const axes_to_world = zmath.Mat{
             zmath.F32x4{ 1.0, 0.0, 0.0, 0.0 },
             zmath.F32x4{ 0.0, 1.0, 0.0, 0.0 },
@@ -454,7 +398,7 @@ fn mouseClickCallback(window: glfw.Window, button: glfw.MouseButton, action: glf
 }
 
 fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.Action, mods: glfw.Mods) void {
-    std.log.debug("SCANCODE: {d}", .{scancode});
+    _ = &scancode;
     if (action == glfw.Action.press and (mods.shift == false and mods.control == false)) {
         var currentCursorPos = window.getCursorPos();
         _ = &currentCursorPos;
@@ -510,4 +454,56 @@ fn mouseScrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
     if (currentKey == .none) {
         scrollOffsetY = 0.0;
     }
+}
+
+pub fn createObject(object: objectLoader.objectStruct, triangleIndices: []u32) u32 {
+    var vao: u32 = 0;
+    gl.GenVertexArrays(1, &vao);
+    gl.BindVertexArray(vao);
+
+    // Create VBO and upload vertex data...
+    var vbo: u32 = 0;
+    gl.GenBuffers(1, &vbo);
+    gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.BufferData(gl.ARRAY_BUFFER, object.vboSize * @sizeOf(objectLoader.Vertex), object.VBO, gl.STATIC_DRAW);
+
+    // Create EBO and upload triangle index data
+    var ebo: u32 = 0;
+    gl.GenBuffers(1, &ebo);
+    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, triangleIndices.len * @sizeOf(u32), triangleIndices.ptr, gl.STATIC_DRAW);
+
+    // Set vertex attribute pointers (example for position)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, @sizeOf(objectLoader.Vertex), 0);
+    gl.EnableVertexAttribArray(0);
+
+    gl.BindVertexArray(0);
+    return vao;
+}
+
+fn convertFacesToTriangles(faces: [*]objectLoader.Faces, facesLength: usize, allocator: *std.mem.Allocator) !([]u32) {
+    // Each quad produces 2 triangles, each triangle uses 3 indices.
+    const triangleIndexCount = facesLength * 6;
+    var triangleIndices = try allocator.alloc(u32, triangleIndexCount);
+    var outIdx: usize = 0;
+    for (faces) |face| {
+        // Convert from 1-based OBJ indices to 0-based indices.
+        const j0 = @as(u32, @intCast(face.face[0] - 1));
+        const j1 = @as(u32, @intCast(face.face[1] - 1));
+        const j2 = @as(u32, @intCast(face.face[2] - 1));
+        const j3 = @as(u32, @intCast(face.face[3] - 1));
+
+        // First triangle: (j0, j1, j2)
+        triangleIndices[outIdx] = j0;
+        triangleIndices[outIdx + 1] = j1;
+        triangleIndices[outIdx + 2] = j2;
+        outIdx += 3;
+
+        // Second triangle: (j0, j2, j3)
+        triangleIndices[outIdx] = j0;
+        triangleIndices[outIdx + 1] = j2;
+        triangleIndices[outIdx + 2] = j3;
+        outIdx += 3;
+    }
+    return triangleIndices;
 }

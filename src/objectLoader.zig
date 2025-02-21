@@ -3,27 +3,42 @@ const fs = @import("std").fs;
 const io = @import("std").io;
 const slicedStr = @import("slicedString.zig");
 
-const Vertex = extern struct { position: [3]f32 };
-const Faces = extern struct { face: [4]i32 };
+pub const Vertex = extern struct { position: [3]f32 };
+pub const Faces = extern struct { face: [4]i32 };
 
 var objectName: slicedStr.slicedString = undefined;
 
-pub const objectStruct = extern struct { VBO: [*]Vertex, EBO: [*]Faces, vboSize: i32, eboSize: i32, slicedName: slicedStr.slicedString };
+pub const objectStruct = extern struct { VBO: [*]Vertex, EBO: [*]Faces, vboSize: usize, eboSize: usize, slicedName: slicedStr.slicedString };
 
 pub fn load() !objectStruct {
     const objectPath: []const u8 = "objects/cube.obj";
-
     const listAllocator = std.heap.page_allocator;
-    var vbo = std.ArrayList(Vertex).init(listAllocator);
-    var ebo = std.ArrayList(Faces).init(listAllocator);
-    defer vbo.deinit();
-    defer ebo.deinit();
+    var vboList = std.ArrayList(Vertex).init(listAllocator);
+    var eboList = std.ArrayList(Faces).init(listAllocator);
+    defer vboList.deinit();
+    defer eboList.deinit();
 
-    // get file content
-    try getFileContent(objectPath, &vbo, &ebo);
+    try getFileContent(objectPath, &vboList, &eboList);
 
-    // return vbo and ebo
-    const returnObject: objectStruct = .{ .VBO = vbo.items.ptr, .EBO = ebo.items.ptr, .vboSize = @intCast(vbo.items.len), .eboSize = @intCast(ebo.items.len), .slicedName = objectName };
+    // Allocate persistent memory for vertex data
+    var persistentVBO: []Vertex = try listAllocator.alloc(Vertex, vboList.items.len);
+    const perVBO: [*]Vertex = persistentVBO.ptr;
+    _ = &persistentVBO;
+    std.mem.copyBackwards(Vertex, persistentVBO, vboList.items);
+
+    // Allocate persistent memory for face data
+    var persistentEBO: []Faces = try listAllocator.alloc(Faces, eboList.items.len);
+    const perEBO: [*]Faces = persistentEBO.ptr;
+    _ = &persistentEBO;
+    std.mem.copyBackwards(Faces, persistentEBO, eboList.items);
+
+    const returnObject: objectStruct = .{
+        .VBO = perVBO,
+        .EBO = perEBO,
+        .vboSize = @as(usize, @intCast(persistentVBO.len)),
+        .eboSize = @as(usize, @intCast(persistentEBO.len)),
+        .slicedName = objectName,
+    };
 
     return returnObject;
 }
@@ -63,7 +78,7 @@ fn parseFile(line: []u8, vboList: *std.ArrayList(Vertex), eboList: *std.ArrayLis
         std.mem.copyBackwards(u8, objectNameBuffer, lineWithoutLetter);
         objectName.data_ptr = objectNameBuffer.ptr;
         objectName.data_len = lineWithoutLetter.len;
-        std.log.info("Loaded Object {s}", .{lineWithoutLetter});
+        std.log.debug("Parsed Object {s}", .{lineWithoutLetter});
     } else if (std.mem.eql(u8, firstLetter, "v") == true) {
         // v Vertex
         // Split into coordinates
