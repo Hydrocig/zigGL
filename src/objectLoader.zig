@@ -1,117 +1,99 @@
 const std = @import("std");
-const fs = @import("std").fs;
-const io = @import("std").io;
-const slicedStr = @import("slicedString.zig");
+const fs = std.fs;
+const io = std.io;
+const mem = std.mem;
 
 pub const Vertex = extern struct { position: [3]f32 };
-pub const Faces = extern struct { face: [4]i32 };
+pub const Face = struct { face: [4]usize };
 
-var objectName: slicedStr.slicedString = undefined;
+pub const ObjectStruct = struct {
+    vbo: std.ArrayList(Vertex),
+    ebo: std.ArrayList(Face),
+    name: std.ArrayList(u8),
+    allocator: std.mem.Allocator,
 
-pub const objectStruct = extern struct { VBO: [*]Vertex, EBO: [*]Faces, vboSize: usize, eboSize: usize, slicedName: slicedStr.slicedString };
+    pub fn deinit(self: *ObjectStruct) void {
+        self.vbo.deinit();
+        self.ebo.deinit();
+        self.name.deinit();
+    }
+};
 
-pub fn load() !objectStruct {
-    const objectPath: []const u8 = "objects/cube.obj";
-    const listAllocator = std.heap.page_allocator;
-    var vboList = std.ArrayList(Vertex).init(listAllocator);
-    var eboList = std.ArrayList(Faces).init(listAllocator);
-    defer vboList.deinit();
-    defer eboList.deinit();
+pub fn load(allocator: std.mem.Allocator) !ObjectStruct {
+    const object_path = "objects/cube.obj";
 
-    try getFileContent(objectPath, &vboList, &eboList);
-
-    // Allocate persistent memory for vertex data
-    var persistentVBO: []Vertex = try listAllocator.alloc(Vertex, vboList.items.len);
-    const perVBO: [*]Vertex = persistentVBO.ptr;
-    _ = &persistentVBO;
-    std.mem.copyBackwards(Vertex, persistentVBO, vboList.items);
-
-    // Allocate persistent memory for face data
-    var persistentEBO: []Faces = try listAllocator.alloc(Faces, eboList.items.len);
-    const perEBO: [*]Faces = persistentEBO.ptr;
-    _ = &persistentEBO;
-    std.mem.copyBackwards(Faces, persistentEBO, eboList.items);
-
-    const returnObject: objectStruct = .{
-        .VBO = perVBO,
-        .EBO = perEBO,
-        .vboSize = @as(usize, @intCast(persistentVBO.len)),
-        .eboSize = @as(usize, @intCast(persistentEBO.len)),
-        .slicedName = objectName,
+    var obj = ObjectStruct{
+        .vbo = std.ArrayList(Vertex).init(allocator),
+        .ebo = std.ArrayList(Face).init(allocator),
+        .name = std.ArrayList(u8).init(allocator),
+        .allocator = allocator,
     };
 
-    return returnObject;
+    try parseObjFile(object_path, &obj);
+    return obj;
 }
 
-fn getFileContent(objectPath: []const u8, vboList: *std.ArrayList(Vertex), eboList: *std.ArrayList(Faces)) !void {
-    var file = try fs.cwd().openFile(objectPath, .{});
+fn parseObjFile(path: []const u8, obj: *ObjectStruct) !void {
+    const file = try fs.cwd().openFile(path, .{});
     defer file.close();
 
-    var bufReader = io.bufferedReader(file.reader());
-    var inStream = bufReader.reader();
+    var buf_reader = io.bufferedReader(file.reader());
+    var in_stream = buf_reader.reader();
 
-    var buf: [1024]u8 = undefined;
+    var line_buf: [1024]u8 = undefined;
 
-    while (inStream.readUntilDelimiterOrEof(&buf, '\n')) |maybeContent| {
-        if (maybeContent) |content| {
-            try parseFile(content, vboList, eboList);
-        } else break;
-    } else |err| {
-        std.log.err("Read error: {}\n", .{err});
+    while (try in_stream.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+        try processLine(line, obj);
     }
 }
 
-fn parseFile(line: []u8, vboList: *std.ArrayList(Vertex), eboList: *std.ArrayList(Faces)) !void {
-    // get first letter of line
-    const firstLetter: []u8 = line[0..1];
-    const lineWithoutLetter: []u8 = line[2..];
+fn processLine(line: []const u8, obj: *ObjectStruct) !void {
+    if (line.len == 0) return;
 
-    var it = std.mem.split(u8, lineWithoutLetter, " ");
+    const prefix = line[0..1];
+    const content = if (line.len > 1) line[2..] else "";
 
-    // ugly if else comparison
-    if (std.mem.eql(u8, firstLetter, "#") == true) {
-        // # Comment -> ignore
-        return;
-    } else if (std.mem.eql(u8, firstLetter, "o") == true) {
-        // o Object Name
-        const objectNameBuffer = try std.heap.page_allocator.alloc(u8, lineWithoutLetter.len);
-        std.mem.copyBackwards(u8, objectNameBuffer, lineWithoutLetter);
-        objectName.data_ptr = objectNameBuffer.ptr;
-        objectName.data_len = lineWithoutLetter.len;
-        std.log.debug("Parsed Object {s}", .{lineWithoutLetter});
-    } else if (std.mem.eql(u8, firstLetter, "v") == true) {
-        // v Vertex
-        // Split into coordinates
-        const xCoordStr: []const u8 = it.next() orelse "";
-        const yCoordStr: []const u8 = it.next() orelse "";
-        const zCoordStr: []const u8 = it.next() orelse "";
-
-        const xCoord: f32 = try std.fmt.parseFloat(f32, xCoordStr);
-        const yCoord: f32 = try std.fmt.parseFloat(f32, yCoordStr);
-        const zCoord: f32 = try std.fmt.parseFloat(f32, zCoordStr);
-
-        const newVertex: Vertex = .{ .position = .{ xCoord, yCoord, zCoord } };
-        try vboList.append(newVertex);
-    } else if (std.mem.eql(u8, firstLetter, "s") == true) {
-        // s Smoothing group
-        // Ignore for now
-        return;
-    } else if (std.mem.eql(u8, firstLetter, "f") == true) {
-        // f face vertex indices
-        // Split into numbers
-        const firstStr: []const u8 = it.next() orelse "";
-        const secondStr: []const u8 = it.next() orelse "";
-        const thirdStr: []const u8 = it.next() orelse "";
-        const fourthStr: []const u8 = it.next() orelse "";
-
-        const first: i32 = try std.fmt.parseInt(i32, firstStr, 10);
-        const second: i32 = try std.fmt.parseInt(i32, secondStr, 10);
-        const third: i32 = try std.fmt.parseInt(i32, thirdStr, 10);
-        const fourth: i32 = try std.fmt.parseInt(i32, fourthStr, 10);
-
-        const newFace: Faces = .{ .face = .{ first, second, third, fourth } };
-        try eboList.append(newFace);
-    } else {
-        std.log.err("Malformatted .obj File!", .{});
+    if (mem.eql(u8, prefix, "o")) {
+        try handleObjectName(content, obj);
+    } else if (mem.eql(u8, prefix, "v")) {
+        try handleVertex(content, obj);
+    } else if (mem.eql(u8, prefix, "f")) {
+        try handleFace(content, obj);
     }
+    // Add other cases as needed
+}
+
+fn handleObjectName(content: []const u8, obj: *ObjectStruct) !void {
+    obj.name.clearRetainingCapacity();
+    try obj.name.appendSlice(content);
+}
+
+fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
+    var components = mem.split(u8, content, " ");
+
+    const x_str = components.next() orelse return error.InvalidVertex;
+    const y_str = components.next() orelse return error.InvalidVertex;
+    const z_str = components.next() orelse return error.InvalidVertex;
+
+    const vertex = Vertex{ .position = .{
+        try std.fmt.parseFloat(f32, x_str),
+        try std.fmt.parseFloat(f32, y_str),
+        try std.fmt.parseFloat(f32, z_str),
+    } };
+
+    try obj.vbo.append(vertex);
+}
+
+fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
+    var indices: [4]usize = undefined;
+    var components = mem.split(u8, content, " ");
+
+    for (&indices) |*index| {
+        const component = components.next() orelse return error.InvalidFace;
+        var iter = mem.split(u8, component, " ");
+        const idx_str = iter.next() orelse return error.InvalidFace;
+        index.* = try std.fmt.parseInt(u32, idx_str, 10) - 1; // Convert to 0-based
+    }
+
+    try obj.ebo.append(Face{ .face = indices });
 }

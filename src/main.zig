@@ -4,7 +4,6 @@ const zmath = @import("zmath");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
 const objectLoader = @import("./objectLoader.zig");
-const slicedStr = @import("slicedString.zig");
 
 // Window
 var xAspect: f32 = 800.0;
@@ -75,38 +74,6 @@ pub fn main() !void {
     gl.makeProcTableCurrent(&gl_procs);
     defer gl.makeProcTableCurrent(null);
 
-    //1.1 Vertex and fragment shaders [x]
-    //1.2 VAO and VBO [x]
-    //1.3 gl.DrawArrays [x]
-    //
-    //2.1 Shader Encapsulation (utility to compile, link, and validate shaders) [x]
-    //2.2 Mesh Abstraction (utility to create VAOs and VBOs) [x]
-    //
-    //3.1 Indexed Rendering support (gl.DrawElements) [x]
-    //
-    //4 Mouse based Rotation [x]
-    //4.1 Capture Mouse Events [x]
-    //4.2 Rotation Angles Update [x]
-    //4.3 Apply Rotation [x]
-    //
-    //5.1 .obj parser -> Ignore textures and normals for now []
-    //5.2 store vertices in a struct []
-    //
-    //6.1 parsed data buffer -> VAO, VBO, IBO -> upload to GPU []
-    //6.2 Vertex attributes -> attribute pointers (position, normal, texcoord) []
-    //
-    //7.1 Multiple objects -> multiple VAOs, VBOs, IBOs []
-    //7.2 Render each object separately []
-    //
-    //8.1 Parse texture coordinates []
-    //8.2 Load textures + bind textures to texture units []
-    //
-    //9.1 Extract and buffer normal vectors []
-    //9.2 Basic lighting []
-    //
-    //10.1 Parse .mtl files and load material properties []
-    //10.2 Normal mapping/PBR -> advanced shading techniques []
-
     // Vertex struct
     const Vertex = extern struct { position: [3]f32, color: [3]f32 };
 
@@ -124,16 +91,19 @@ pub fn main() !void {
     };
     // zig fmt: on
 
-    // Load Object
-    const loadedObject: objectLoader.objectStruct = try objectLoader.load();
+    // CHANGED: Use proper allocator and ArrayList-based object loading
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    var loadedObject = try objectLoader.load(allocator);
+    defer loadedObject.deinit();
 
-    var allocator = std.heap.page_allocator;
-
-    try convertFacesToTriangles(loadedObject.EBO, loadedObject.eboSize, &allocator);
-    const triangleIndices = try convertFacesToTriangles(loadedObject.EBO[0..@as(usize, @intCast(loadedObject.eboSize))], allocator);
+    // CHANGED: Use ArrayList items for triangle conversion
+    const triangleIndices = try convertFacesToTriangles(loadedObject.ebo.items, loadedObject.vbo.items.len, allocator);
+    defer allocator.free(triangleIndices);
     const triangleCount = triangleIndices.len;
 
-    const objectVAO: u32 = createObject(loadedObject);
+    // CHANGED: Pass ArrayList-based object to createObject
+    const objectVAO: u32 = createObject(&loadedObject, triangleIndices);
 
     // get shader from external file
     const vertexShaderSource: []const u8 = try std.fs.cwd().readFileAlloc(allocator, "src/vertex.shader.glsl", 1024 * 1024);
@@ -315,7 +285,7 @@ pub fn main() !void {
 
         // Draw object
         gl.BindVertexArray(objectVAO);
-        gl.DrawElements(gl.TRIANGLES, triangleCount, gl.UNSIGNED_INT, 0);
+        gl.DrawElements(gl.TRIANGLES, @intCast(triangleCount), gl.UNSIGNED_INT, 0);
 
         // MVP Matrix for axes
         const axes_to_world = zmath.Mat{
@@ -456,24 +426,25 @@ fn mouseScrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
     }
 }
 
-pub fn createObject(object: objectLoader.objectStruct, triangleIndices: []u32) u32 {
+// CHANGED: Updated to use ArrayList items
+pub fn createObject(object: *objectLoader.ObjectStruct, triangleIndices: []u32) u32 {
     var vao: u32 = 0;
-    gl.GenVertexArrays(1, &vao);
+    gl.GenVertexArrays(1, (&vao)[0..1]);
     gl.BindVertexArray(vao);
 
-    // Create VBO and upload vertex data...
+    // Create VBO using ArrayList items
     var vbo: u32 = 0;
-    gl.GenBuffers(1, &vbo);
+    gl.GenBuffers(1, (&vbo)[0..1]);
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.BufferData(gl.ARRAY_BUFFER, object.vboSize * @sizeOf(objectLoader.Vertex), object.VBO, gl.STATIC_DRAW);
+    gl.BufferData(gl.ARRAY_BUFFER, @intCast(object.vbo.items.len * @sizeOf(objectLoader.Vertex)), object.vbo.items.ptr, gl.STATIC_DRAW);
 
-    // Create EBO and upload triangle index data
+    // Create EBO using converted indices
     var ebo: u32 = 0;
-    gl.GenBuffers(1, &ebo);
+    gl.GenBuffers(1, (&ebo)[0..1]);
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
-    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, triangleIndices.len * @sizeOf(u32), triangleIndices.ptr, gl.STATIC_DRAW);
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(triangleIndices.len * @sizeOf(u32)), triangleIndices.ptr, gl.STATIC_DRAW);
 
-    // Set vertex attribute pointers (example for position)
+    // Set vertex attribute pointers
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, @sizeOf(objectLoader.Vertex), 0);
     gl.EnableVertexAttribArray(0);
 
@@ -481,29 +452,32 @@ pub fn createObject(object: objectLoader.objectStruct, triangleIndices: []u32) u
     return vao;
 }
 
-fn convertFacesToTriangles(faces: [*]objectLoader.Faces, facesLength: usize, allocator: *std.mem.Allocator) !([]u32) {
-    // Each quad produces 2 triangles, each triangle uses 3 indices.
-    const triangleIndexCount = facesLength * 6;
+fn convertFacesToTriangles(faces: []const objectLoader.Face, vboLength: usize, allocator: std.mem.Allocator) ![]u32 {
+    const triangleIndexCount = faces.len * 6;
     var triangleIndices = try allocator.alloc(u32, triangleIndexCount);
     var outIdx: usize = 0;
+
     for (faces) |face| {
-        // Convert from 1-based OBJ indices to 0-based indices.
-        const j0 = @as(u32, @intCast(face.face[0] - 1));
-        const j1 = @as(u32, @intCast(face.face[1] - 1));
-        const j2 = @as(u32, @intCast(face.face[2] - 1));
-        const j3 = @as(u32, @intCast(face.face[3] - 1));
+        // Add bounds checking
+        const indices = face.face;
+        for (indices) |index| {
+            if (index >= vboLength) {
+                std.log.err("Invalid face index: {}, max vertices: {}", .{ index, vboLength });
+                return error.InvalidFaceIndex;
+            }
+        }
 
-        // First triangle: (j0, j1, j2)
-        triangleIndices[outIdx] = j0;
-        triangleIndices[outIdx + 1] = j1;
-        triangleIndices[outIdx + 2] = j2;
-        outIdx += 3;
+        // First triangle
+        triangleIndices[outIdx] = @intCast(indices[0]);
+        triangleIndices[outIdx + 1] = @intCast(indices[1]);
+        triangleIndices[outIdx + 2] = @intCast(indices[2]);
 
-        // Second triangle: (j0, j2, j3)
-        triangleIndices[outIdx] = j0;
-        triangleIndices[outIdx + 1] = j2;
-        triangleIndices[outIdx + 2] = j3;
-        outIdx += 3;
+        // Second triangle
+        triangleIndices[outIdx + 3] = @intCast(indices[0]);
+        triangleIndices[outIdx + 4] = @intCast(indices[2]);
+        triangleIndices[outIdx + 5] = @intCast(indices[3]);
+
+        outIdx += 6;
     }
     return triangleIndices;
 }
