@@ -3,7 +3,7 @@ const math = @import("std").math;
 const zmath = @import("zmath");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
-const objectLoader = @import("./objectLoader.zig");
+const objectLoader = @import("./graphics/objectLoader.zig");
 
 // Window
 var xAspect: f32 = 800.0;
@@ -90,9 +90,9 @@ pub fn main() !void {
     const objectVAO: u32 = createObject(&loadedObject, triangleIndices);
 
     // get shader from external file
-    const vertexShaderSource: []const u8 = try std.fs.cwd().readFileAlloc(allocator, "src/vertex.shader.glsl", 1024 * 1024);
+    const vertexShaderSource: []const u8 = try std.fs.cwd().readFileAlloc(allocator, "src/graphics/shaders/vertex.shader.glsl", 1024 * 1024);
     defer allocator.free(vertexShaderSource);
-    const fragmentShaderSource: []const u8 = try std.fs.cwd().readFileAlloc(allocator, "src/fragment.shader.glsl", 1024 * 1024);
+    const fragmentShaderSource: []const u8 = try std.fs.cwd().readFileAlloc(allocator, "src/graphics/shaders/fragment.shader.glsl", 1024 * 1024);
     defer allocator.free(fragmentShaderSource);
 
     // Compile vertex shader
