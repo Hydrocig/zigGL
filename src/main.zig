@@ -91,18 +91,19 @@ pub fn main() !void {
     };
     // zig fmt: on
 
-    // CHANGED: Use proper allocator and ArrayList-based object loading
+    // Use proper allocator and ArrayList-based object loading
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    var loadedObject = try objectLoader.load(allocator);
+    var loadedObject = try objectLoader.load("objects/cat.obj", allocator);
     defer loadedObject.deinit();
 
-    // CHANGED: Use ArrayList items for triangle conversion
+    // Use ArrayList items for triangle conversion
     const triangleIndices = try convertFacesToTriangles(loadedObject.ebo.items, loadedObject.vbo.items.len, allocator);
     defer allocator.free(triangleIndices);
     const triangleCount = triangleIndices.len;
+    std.log.debug("FACES: {d}", .{triangleIndices});
 
-    // CHANGED: Pass ArrayList-based object to createObject
+    // Pass ArrayList-based object to createObject
     const objectVAO: u32 = createObject(&loadedObject, triangleIndices);
 
     // get shader from external file
@@ -169,16 +170,7 @@ pub fn main() !void {
     defer gl.BindBuffer(gl.ARRAY_BUFFER, 0);
     gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(axisVertices)), &axisVertices, gl.STATIC_DRAW);
 
-    // Vertex attributes
-    const stride = @sizeOf(Vertex);
-    // first attribute for position
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0);
-    gl.EnableVertexAttribArray(0);
-    // second attribute for color
-    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, @sizeOf([3]f32));
-    gl.EnableVertexAttribArray(1);
-
-    // Depth testing
+    gl.Disable(gl.CULL_FACE);
     gl.Enable(gl.DEPTH_TEST);
 
     // Mouse events
@@ -300,13 +292,13 @@ pub fn main() !void {
         gl.UniformMatrix4fv(0, 1, gl.FALSE, &axes_to_clip[0][0]);
 
         // Draw axes
-        gl.BindBuffer(gl.ARRAY_BUFFER, axisVBO);
-        gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 0);
-        gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 3 * @sizeOf(f32));
-        gl.EnableVertexAttribArray(1);
-        gl.BindVertexArray(vao);
-        gl.DrawArrays(gl.LINES, 0, 6);
+        //gl.BindBuffer(gl.ARRAY_BUFFER, axisVBO);
+        //gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 0);
+        //gl.EnableVertexAttribArray(0);
+        ////gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 3 * @sizeOf(f32));
+        ////gl.EnableVertexAttribArray(1);
+        //gl.BindVertexArray(vao);
+        //gl.DrawArrays(gl.LINES, 0, 6);
 
         window.swapBuffers();
         glfw.pollEvents();
@@ -397,7 +389,6 @@ fn keyPressCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: g
 }
 
 fn windowSizeCallback(window: glfw.Window, width: u32, height: u32) void {
-    //window.focus();
     _ = &window;
 
     xAspect = @floatFromInt(width);
@@ -412,7 +403,7 @@ fn windowSizeCallback(window: glfw.Window, width: u32, height: u32) void {
 
     // Update projection matrix
     const view_to_clip = zmath.perspectiveFovRhGl(0.25 * math.pi, aspect_ratio, 0.1, 20.0);
-    gl.UniformMatrix4fv(1, 1, gl.FALSE, &view_to_clip[0][0]);
+    gl.UniformMatrix4fv(0, 1, gl.FALSE, &view_to_clip[0][0]);
 }
 
 fn mouseScrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
@@ -426,7 +417,7 @@ fn mouseScrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
     }
 }
 
-// CHANGED: Updated to use ArrayList items
+// Updated to use ArrayList items
 pub fn createObject(object: *objectLoader.ObjectStruct, triangleIndices: []u32) u32 {
     var vao: u32 = 0;
     gl.GenVertexArrays(1, (&vao)[0..1]);
@@ -445,39 +436,26 @@ pub fn createObject(object: *objectLoader.ObjectStruct, triangleIndices: []u32) 
     gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(triangleIndices.len * @sizeOf(u32)), triangleIndices.ptr, gl.STATIC_DRAW);
 
     // Set vertex attribute pointers
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, @sizeOf(objectLoader.Vertex), 0);
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, @sizeOf(f32) * 3, 0);
     gl.EnableVertexAttribArray(0);
 
-    gl.BindVertexArray(0);
     return vao;
 }
 
 fn convertFacesToTriangles(faces: []const objectLoader.Face, vboLength: usize, allocator: std.mem.Allocator) ![]u32 {
-    const triangleIndexCount = faces.len * 6;
+    const triangleIndexCount = faces.len * 3;
     var triangleIndices = try allocator.alloc(u32, triangleIndexCount);
     var outIdx: usize = 0;
 
     for (faces) |face| {
-        // Add bounds checking
         const indices = face.face;
         for (indices) |index| {
-            if (index >= vboLength) {
-                std.log.err("Invalid face index: {}, max vertices: {}", .{ index, vboLength });
-                return error.InvalidFaceIndex;
-            }
+            if (index >= vboLength) return error.InvalidFaceIndex;
         }
-
-        // First triangle
         triangleIndices[outIdx] = @intCast(indices[0]);
         triangleIndices[outIdx + 1] = @intCast(indices[1]);
         triangleIndices[outIdx + 2] = @intCast(indices[2]);
-
-        // Second triangle
-        triangleIndices[outIdx + 3] = @intCast(indices[0]);
-        triangleIndices[outIdx + 4] = @intCast(indices[2]);
-        triangleIndices[outIdx + 5] = @intCast(indices[3]);
-
-        outIdx += 6;
+        outIdx += 3;
     }
     return triangleIndices;
 }

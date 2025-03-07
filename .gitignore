@@ -3,3 +3,6 @@
 /.zig-cache
 /libs
 /zig-out
+
+
+objects/cat.obj

@@ -4,7 +4,7 @@ const io = std.io;
 const mem = std.mem;
 
 pub const Vertex = extern struct { position: [3]f32 };
-pub const Face = struct { face: [4]usize };
+pub const Face = struct { face: [3]usize };
 
 pub const ObjectStruct = struct {
     vbo: std.ArrayList(Vertex),
@@ -19,9 +19,7 @@ pub const ObjectStruct = struct {
     }
 };
 
-pub fn load(allocator: std.mem.Allocator) !ObjectStruct {
-    const object_path = "objects/cube.obj";
-
+pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
     var obj = ObjectStruct{
         .vbo = std.ArrayList(Vertex).init(allocator),
         .ebo = std.ArrayList(Face).init(allocator),
@@ -29,7 +27,7 @@ pub fn load(allocator: std.mem.Allocator) !ObjectStruct {
         .allocator = allocator,
     };
 
-    try parseObjFile(object_path, &obj);
+    try parseObjFile(objPath, &obj);
     return obj;
 }
 
@@ -50,17 +48,16 @@ fn parseObjFile(path: []const u8, obj: *ObjectStruct) !void {
 fn processLine(line: []const u8, obj: *ObjectStruct) !void {
     if (line.len == 0) return;
 
-    const prefix = line[0..1];
+    const prefix = line[0..2];
     const content = if (line.len > 1) line[2..] else "";
 
-    if (mem.eql(u8, prefix, "o")) {
+    if (mem.eql(u8, prefix, "o ")) {
         try handleObjectName(content, obj);
-    } else if (mem.eql(u8, prefix, "v")) {
+    } else if (mem.eql(u8, prefix, "v ")) {
         try handleVertex(content, obj);
-    } else if (mem.eql(u8, prefix, "f")) {
+    } else if (mem.eql(u8, prefix, "f ")) {
         try handleFace(content, obj);
     }
-    // Add other cases as needed
 }
 
 fn handleObjectName(content: []const u8, obj: *ObjectStruct) !void {
@@ -81,18 +78,23 @@ fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
         try std.fmt.parseFloat(f32, z_str),
     } };
 
+    std.log.debug("VERTEX: {s} {s} {s}", .{ x_str, y_str, z_str });
+
     try obj.vbo.append(vertex);
 }
 
 fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
-    var indices: [4]usize = undefined;
+    var indices: [3]usize = undefined;
     var components = mem.split(u8, content, " ");
 
     for (&indices) |*index| {
         const component = components.next() orelse return error.InvalidFace;
-        var iter = mem.split(u8, component, " ");
+        var iter = mem.split(u8, component, "/");
+
         const idx_str = iter.next() orelse return error.InvalidFace;
-        index.* = try std.fmt.parseInt(u32, idx_str, 10) - 1; // Convert to 0-based
+        index.* = (try std.fmt.parseInt(usize, idx_str, 10)) - 1; // 0-based
+
+        // Skip texture and normal indices
     }
 
     try obj.ebo.append(Face{ .face = indices });
