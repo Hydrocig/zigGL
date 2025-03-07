@@ -1,5 +1,8 @@
 /.vscode
 
+/.idea
+/.run
+
 /.zig-cache
 /libs
 /zig-out
