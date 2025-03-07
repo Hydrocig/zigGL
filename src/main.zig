@@ -74,27 +74,10 @@ pub fn main() !void {
     gl.makeProcTableCurrent(&gl_procs);
     defer gl.makeProcTableCurrent(null);
 
-    // Vertex struct
-    const Vertex = extern struct { position: [3]f32, color: [3]f32 };
-
-    // zig fmt: off
-    const axisVertices = [_]Vertex{
-        // X axis (red)
-        .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 1.0, 0.0, 0.0} },
-        .{ .position = .{1.0, 0.0, 0.0}, .color = .{ 1.0, 0.0, 0.0} },
-        // Y axis (green)
-        .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 0.0, 1.0, 0.0} },
-        .{ .position = .{0.0, 1.0, 0.0}, .color = .{ 0.0, 1.0, 0.0} },
-        // Z axis (blue)
-        .{ .position = .{0.0, 0.0, 0.0}, .color = .{ 0.0, 0.0, 1.0} },
-        .{ .position = .{0.0, 0.0, 1.0}, .color = .{ 0.0, 0.0, 1.0} },
-    };
-    // zig fmt: on
-
     // Use proper allocator and ArrayList-based object loading
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    var loadedObject = try objectLoader.load("objects/cat.obj", allocator);
+    var loadedObject = try objectLoader.load("objects/cube2.obj", allocator);
     defer loadedObject.deinit();
 
     // Use ArrayList items for triangle conversion
@@ -154,21 +137,6 @@ pub fn main() !void {
     defer gl.DeleteProgram(shaderProgram);
 
     gl.UseProgram(shaderProgram);
-
-    // axis VAO
-    var vao: c_uint = undefined;
-    gl.GenVertexArrays(1, (&vao)[0..1]);
-    defer gl.DeleteVertexArrays(1, (&vao)[0..1]);
-    gl.BindVertexArray(vao);
-    defer gl.BindVertexArray(0);
-
-    // axis VBOs
-    var axisVBO: gl.uint = 0;
-    gl.GenBuffers(1, (&axisVBO)[0..1]);
-    defer gl.DeleteBuffers(1, (&axisVBO)[0..1]);
-    gl.BindBuffer(gl.ARRAY_BUFFER, axisVBO);
-    defer gl.BindBuffer(gl.ARRAY_BUFFER, 0);
-    gl.BufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(axisVertices)), &axisVertices, gl.STATIC_DRAW);
 
     gl.Disable(gl.CULL_FACE);
     gl.Enable(gl.DEPTH_TEST);
@@ -290,15 +258,6 @@ pub fn main() !void {
         const axes_to_clip = zmath.mul(axes_to_view, view_to_clip);
 
         gl.UniformMatrix4fv(0, 1, gl.FALSE, &axes_to_clip[0][0]);
-
-        // Draw axes
-        //gl.BindBuffer(gl.ARRAY_BUFFER, axisVBO);
-        //gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 0);
-        //gl.EnableVertexAttribArray(0);
-        ////gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 6 * @sizeOf(f32), 3 * @sizeOf(f32));
-        ////gl.EnableVertexAttribArray(1);
-        //gl.BindVertexArray(vao);
-        //gl.DrawArrays(gl.LINES, 0, 6);
 
         window.swapBuffers();
         glfw.pollEvents();
