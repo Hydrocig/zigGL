@@ -39,6 +39,7 @@ pub fn main() !void {
     var scale = zmath.identity();
 
     while (!win.shouldClose()) {
+        gl.ClearColor(1.0, 1.0, 1.0, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         // Update transformations based on input state
@@ -67,6 +68,13 @@ pub fn main() !void {
 fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath.Mat, state: *window.WindowState) void {
     // Handle rotation
     if (state.mouse.dragging) {
+        if (state.mouse.justPressed) {
+            state.mouse.last_x = state.mouse.x;
+            state.mouse.last_y = state.mouse.y;
+            state.mouse.justPressed = false;
+            return;
+        }
+
         const deltaX = state.mouse.x - state.mouse.last_x;
         const deltaY = state.mouse.y - state.mouse.last_y;
 

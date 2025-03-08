@@ -22,6 +22,7 @@ pub const MouseState = struct {
     last_x: f64 = 0,
     last_y: f64 = 0,
     dragging: bool = false,
+    justPressed: bool = true,
 };
 
 pub const KeyState = union(enum) {
@@ -87,8 +88,10 @@ fn mouseCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Act
     if (button == .left and mods.shift == true) {
         if (action == .press) {
             state.mouse.dragging = true;
+            state.mouse.justPressed = true;
         } else {
             state.mouse.dragging = false;
+            state.mouse.justPressed = false;
         }
     } else {
         state.mouse.dragging = false;
