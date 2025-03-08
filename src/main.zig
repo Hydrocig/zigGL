@@ -11,9 +11,14 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
+    if (!glfw.init(.{})) {
+        std.log.err("failed to initialize GLFW: {?s}", .{glfw.getErrorString()});
+        return error.GLInitFailed;
+    }
+    defer glfw.terminate();
+
     const win = try window.init("zigGL");
     defer win.destroy();
-    defer glfw.terminate();
 
     var state = window.WindowState{};
     window.setupCallbacks(win, &state);
@@ -22,8 +27,8 @@ pub fn main() !void {
     defer cube.deinit();
 
     const program = try shader.compile(allocator,
-        "src/shaders/vertex.shader.glsl",
-        "src/shaders/fragment.shader.glsl");
+        "src/graphics/shaders/vertex.shader.glsl",
+        "src/graphics/shaders/fragment.shader.glsl");
     defer gl.DeleteProgram(program);
 
     gl.Enable(gl.DEPTH_TEST);

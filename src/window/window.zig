@@ -3,6 +3,8 @@ const glfw = @import("mach-glfw");
 const zmath = @import("zmath");
 const gl = @import("gl");
 
+var gl_proc_table: gl.ProcTable = undefined;
+
 const DEFAULT_WIDTH: f32 = 800;
 const DEFAULT_HEIGHT: f32 = 800;
 
@@ -32,7 +34,6 @@ pub const KeyState = union(enum) {
 
 pub fn init(title: [*:0]const u8) !glfw.Window {
     glfw.setErrorCallback(errorCallback);
-    if (!glfw.init(.{})) return error.GLFWInitFailed;
 
     const window = glfw.Window.create(
 
@@ -47,12 +48,20 @@ pub fn init(title: [*:0]const u8) !glfw.Window {
     }) orelse return error.WindowCreateFailed;
 
     glfw.makeContextCurrent(window);
+
+    // Use the global ProcTable instead of a local one
+    if (!gl_proc_table.init(glfw.getProcAddress)) {
+        std.log.err("failed to initialize ProcTable: {?s}", .{glfw.getErrorString()});
+        return error.GLInitFailed;
+    }
+    gl.makeProcTableCurrent(&gl_proc_table);
+
     glfw.swapInterval(1);
     return window;
 }
 
 fn errorCallback(error_code: glfw.ErrorCode, description: [:0]const u8) void {
-    std.log.err("GLFW error: {}: {s}", .{error_code, description});
+    std.log.err("GLFW error: {}: {s}", .{ error_code, description });
 }
 
 pub fn setupCallbacks(window: glfw.Window, state: *WindowState) void {
