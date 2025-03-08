@@ -49,7 +49,6 @@ pub fn init(title: [*:0]const u8) !glfw.Window {
 
     glfw.makeContextCurrent(window);
 
-    // Use the global ProcTable instead of a local one
     if (!gl_proc_table.init(glfw.getProcAddress)) {
         std.log.err("failed to initialize ProcTable: {?s}", .{glfw.getErrorString()});
         return error.GLInitFailed;
@@ -66,35 +65,42 @@ fn errorCallback(error_code: glfw.ErrorCode, description: [:0]const u8) void {
 
 pub fn setupCallbacks(window: glfw.Window, state: *WindowState) void {
     window.setUserPointer(state);
+
     window.setMouseButtonCallback(mouseCallback);
+    window.setCursorPosCallback(cursorCallback);
     window.setKeyCallback(keyCallback);
     window.setScrollCallback(scrollCallback);
     window.setFramebufferSizeCallback(resizeCallback);
 }
 
-fn mouseCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
-    _ = &mods;
+fn cursorCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
     const state: *WindowState = window.getUserPointer(WindowState).?;
 
-    if (button == .left) {
+    state.mouse.x = xpos;
+    state.mouse.y = ypos;
+}
+
+fn mouseCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
+    const state: *WindowState = window.getUserPointer(WindowState).?;
+    state.keys = .none;
+
+    if (button == .left and mods.shift == true) {
         if (action == .press) {
-            const pos = window.getCursorPos();
             state.mouse.dragging = true;
-            state.mouse.last_x = pos.xpos;
-            state.mouse.last_y = pos.ypos;
         } else {
             state.mouse.dragging = false;
         }
+    } else {
+        state.mouse.dragging = false;
     }
 }
 
 fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.Action, mods: glfw.Mods) void {
     _ = &scancode;
-    _ = &mods;
     _ = &window;
     const state: *WindowState = window.getUserPointer(WindowState).?;
 
-    if (action == .press) {
+    if (action == .press and mods.control == false and mods.shift == false) {
         state.keys = switch (key) {
             .x => .x,
             .y => .y,

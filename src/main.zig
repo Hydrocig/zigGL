@@ -85,9 +85,14 @@ fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath
     // Handle translation and scaling
     switch (state.keys) {
         .x, .y, .z => {
+            if (state.mouse.last_x == 0 or state.mouse.last_y == 0) {
+                state.mouse.last_x = state.mouse.x;
+                state.mouse.last_y = state.mouse.y;
+            }
+
             const deltaX = state.mouse.x - state.mouse.last_x;
             const deltaY = state.mouse.y - state.mouse.last_y;
-            const delta = @max(deltaX, deltaY) * 0.1;
+            const delta = (deltaX + deltaY) * 0.006;
 
             const axis: usize = switch (state.keys) {
                 .x => 0,
@@ -104,20 +109,30 @@ fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath
             state.mouse.last_y = state.mouse.y;
         },
         .s => {
-            const deltaX = state.mouse.x - state.mouse.last_x;
-            const deltaY = state.mouse.y - state.mouse.last_y;
-            const mouseDelta = @max(deltaX, deltaY);
-            const scrollDelta = state.scroll;
-
-            var totalDelta = @as(f32, @floatCast((mouseDelta + scrollDelta) * 0.01));
-            if (totalDelta < 0) {
-                totalDelta = std.math.pow(f32, totalDelta, 2);
+            if (state.mouse.last_x == 0 or state.mouse.last_y == 0) {
+                state.mouse.last_x = state.mouse.x;
+                state.mouse.last_y = state.mouse.y;
             }
 
-            scale.* = zmath.scaling(totalDelta, totalDelta, totalDelta);
+            const deltaX = state.mouse.x - state.mouse.last_x;
+            const deltaY = state.mouse.y - state.mouse.last_y;
+            const mouseDelta = deltaX + deltaY;
+            const scrollDelta = state.scroll;
+
+            var totalDelta = @as(f32, @floatCast((mouseDelta + scrollDelta) * 0.006));
+
+            if (totalDelta < 0) {
+                totalDelta = totalDelta * 1.5;
+            }
+
+            const scaleFactor = 1.0 + totalDelta;
+            const scaleMatrix = zmath.scaling(scaleFactor, scaleFactor, scaleFactor);
+            scale.* = zmath.mul(scale.*, scaleMatrix);
+
             state.scroll = 0;
             state.mouse.last_x = state.mouse.x;
             state.mouse.last_y = state.mouse.y;
+
         },
         .none => {},
     }

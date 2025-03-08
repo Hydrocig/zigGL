@@ -78,8 +78,6 @@ fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
         try std.fmt.parseFloat(f32, z_str),
     } };
 
-    std.log.debug("VERTEX: {s} {s} {s}", .{ x_str, y_str, z_str });
-
     try obj.vbo.append(vertex);
 }
 
