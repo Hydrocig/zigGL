@@ -6,9 +6,11 @@ const std = @import("std");
 const gl = @import("gl");
 const zmath = @import("zmath");
 const math = @import("std").math;
+const glfw = @import("zglfw");
+const zgui = @import("zgui");
+
 const window = @import("./window/window.zig");
 const shader = @import("./graphics/shader.zig");
-const glfw = @import("mach-glfw");
 const mesh = @import("./graphics/mesh.zig");
 
 pub fn main() !void {
@@ -16,10 +18,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // GLFW initialization
-    if (!glfw.init(.{})) {
-        std.log.err("failed to initialize GLFW: {?s}", .{glfw.getErrorString()});
-        return error.GLInitFailed;
-    }
+    try glfw.init();
     defer glfw.terminate();
 
     // Window creation
@@ -47,8 +46,28 @@ pub fn main() !void {
     var translation = zmath.identity();                                 // Translation matrix
     var scale = zmath.identity();                                       // Scale matrix
 
+    // zgui initialization
+    //zgui.init(allocator);
+    //defer zgui.deinit();
+
+
+    //_ = zgui.io.addFontFromFile(
+    //    "./content/Roboto-Medium.ttf",
+    //    std.math.floor(16.0 * 1),
+    //);
+    //zgui.io.setDisplaySize(800, 800);
+
     // Main loop
     while (!win.shouldClose()) {
+        //zgui.newFrame();
+
+
+        //if (zgui.begin("Example Window", .{})) {
+        //    var value: f32 = 0.0;
+        //    _ = zgui.sliderFloat("Adjust", .{.v = &value, .min = 0.0, .max = 1.0});
+        //}
+        //zgui.end();
+
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -75,6 +94,7 @@ pub fn main() !void {
         gl.BindVertexArray(cube.vao);
         gl.DrawElements(gl.TRIANGLES, @intCast(cube.index_count), gl.UNSIGNED_INT, 0);
 
+        //zgui.render();
         win.swapBuffers();
         glfw.pollEvents();
     }

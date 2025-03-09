@@ -1,5 +1,4 @@
 const std = @import("std");
-const mach_glfw = @import("mach-glfw");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -16,12 +15,13 @@ pub fn build(b: *std.Build) void {
     const zmath = b.dependency("zmath", .{});
     exe.root_module.addImport("zmath", zmath.module("root"));
 
-    // mach-glfw
-    const glfw_dep = b.dependency("mach_glfw", .{
+    // zglfw
+    const zglfw = b.dependency("zglfw", .{
         .target = target,
         .optimize = optimize,
     });
-    exe.root_module.addImport("mach-glfw", glfw_dep.module("mach-glfw"));
+    exe.root_module.addImport("zglfw", zglfw.module("root"));
+    exe.linkLibrary(zglfw.artifact("glfw"));
 
     // zigglgen (OpenGL bindings)
     const gl_bindings = @import("zigglgen").generateBindingsModule(b, .{

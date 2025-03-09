@@ -5,7 +5,7 @@
 //! Creates the window and sets up the OpenGL context
 
 const std = @import("std");
-const glfw = @import("mach-glfw");
+const glfw = @import("zglfw");
 const zmath = @import("zmath");
 const gl = @import("gl");
 
@@ -61,25 +61,31 @@ pub const KeyState = union(enum) {
 
 /// Initialize the window and OpenGL context
 /// Gets called once at the start of the program
-pub fn init(title: [*:0]const u8) !glfw.Window {
-    glfw.setErrorCallback(errorCallback);
+pub fn init(title: [:0]const u8) !*glfw.Window {
+    const errorCallbackResult = glfw.setErrorCallback(errorCallback);
+    _ = errorCallbackResult;
 
-    const window = glfw.Window.create(
+    const gl_major = 4;
+    const gl_minor = 5;
+    glfw.windowHint(.context_version_major, gl_major);
+    glfw.windowHint(.context_version_minor, gl_minor);
+    glfw.windowHint(.opengl_profile, .opengl_core_profile);
+    glfw.windowHint(.opengl_forward_compat, true);
+    glfw.windowHint(.client_api, .opengl_api);
+    glfw.windowHint(.doublebuffer, true);
+
+    const window = try glfw.Window.create(
         @intFromFloat(DEFAULT_WIDTH),                    // Window-width
         @intFromFloat(DEFAULT_HEIGHT),                  // Window-height
         title,                                            // Window-title
-        null, null, .{
-        .context_version_major = 4,                      // OpenGL major version
-        .context_version_minor = 5,                      // OpenGL minor version
-        .opengl_profile = .opengl_core_profile,  // OpenGL profile
-        .opengl_forward_compat = true,                   // OpenGL forward compatibility
-    }) orelse return error.WindowCreateFailed;
+        null
+    );
 
     glfw.makeContextCurrent(window);
 
     // Initialize OpenGL function pointers
     if (!gl_proc_table.init(glfw.getProcAddress)) {
-        std.log.err("failed to initialize ProcTable: {?s}", .{glfw.getErrorString()});
+        std.log.err("failed to initialize ProcTable ", .{});
         return error.GLInitFailed;
     }
     gl.makeProcTableCurrent(&gl_proc_table);
@@ -88,25 +94,25 @@ pub fn init(title: [*:0]const u8) !glfw.Window {
     return window;
 }
 
-fn errorCallback(error_code: glfw.ErrorCode, description: [:0]const u8) void {
-    std.log.err("GLFW error: {}: {s}", .{ error_code, description });
+fn errorCallback(error_code: glfw.ErrorCode, description: ?[*:0]const u8) callconv(.C) void {
+    std.log.err("GLFW error: {}: {s}", .{ error_code, description.? });
 }
 
 /// Setup the GLFW callbacks for the window
 /// Sets the user pointer to the window state
-pub fn setupCallbacks(window: glfw.Window, state: *WindowState) void {
+pub fn setupCallbacks(window: *glfw.Window, state: *WindowState) void {
     window.setUserPointer(state);
 
-    window.setMouseButtonCallback(mouseCallback);
-    window.setCursorPosCallback(cursorCallback);
-    window.setKeyCallback(keyCallback);
-    window.setScrollCallback(scrollCallback);
-    window.setFramebufferSizeCallback(resizeCallback);
+    _ = window.setMouseButtonCallback(mouseCallback);
+    _ = window.setCursorPosCallback(cursorCallback);
+    _ = window.setKeyCallback(keyCallback);
+    _ = window.setScrollCallback(scrollCallback);
+    _ = window.setFramebufferSizeCallback(resizeCallback);
 }
 
 /// GLFW cursor position callback
 /// Updates the mouse position when the cursor moves
-fn cursorCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
+fn cursorCallback(window: *glfw.Window, xpos: f64, ypos: f64) callconv(.C) void {
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
 
     state.mouse.x = xpos;
@@ -115,7 +121,7 @@ fn cursorCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
 
 /// GLFW mouse button callback
 /// Updates the mouse dragging state when a mouse button is pressed or released
-fn mouseCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
+fn mouseCallback(window: *glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) callconv(.C) void {
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
     state.keys = .none;
 
@@ -135,7 +141,7 @@ fn mouseCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Act
 
 /// GLFW key callback
 /// Updates the key state when a key is pressed or released
-fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.Action, mods: glfw.Mods) void {
+fn keyCallback(window: *glfw.Window, key: glfw.Key, scancode: i32, action: glfw.Action, mods: glfw.Mods) callconv(.C) void {
     _ = &scancode;
     _ = &window;
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
@@ -156,7 +162,7 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.A
 
 /// GLFW scroll callback
 /// Updates the scroll value when the mouse wheel is scrolled
-fn scrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
+fn scrollCallback(window: *glfw.Window, xoffset: f64, yoffset: f64) callconv(.C) void {
     _ = &xoffset;
     _ = &window;
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
@@ -166,7 +172,7 @@ fn scrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
 
 /// GLFW framebuffer size callback
 /// Updates the window width and height when the window is resized
-fn resizeCallback(window: glfw.Window, width: u32, height: u32) void {
+fn resizeCallback(window: *glfw.Window, width: c_int, height: c_int) callconv(.C) void {
     _ = &window;
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
 
