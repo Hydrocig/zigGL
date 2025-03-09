@@ -47,26 +47,27 @@ pub fn main() !void {
     var scale = zmath.identity();                                       // Scale matrix
 
     // zgui initialization
-    //zgui.init(allocator);
-    //defer zgui.deinit();
+    zgui.init(allocator);
+    defer zgui.deinit();
 
+    //zgui.backend.init(win);
 
-    //_ = zgui.io.addFontFromFile(
-    //    "./content/Roboto-Medium.ttf",
-    //    std.math.floor(16.0 * 1),
-    //);
-    //zgui.io.setDisplaySize(800, 800);
+    _ = zgui.io.addFontFromFile(
+        "./content/Roboto-Medium.ttf",
+        std.math.floor(16.0 * 1),
+    );
+    zgui.io.setDisplaySize(800, 800);
 
     // Main loop
     while (!win.shouldClose()) {
-        //zgui.newFrame();
+        zgui.newFrame();
 
 
-        //if (zgui.begin("Example Window", .{})) {
-        //    var value: f32 = 0.0;
-        //    _ = zgui.sliderFloat("Adjust", .{.v = &value, .min = 0.0, .max = 1.0});
-        //}
-        //zgui.end();
+        if (zgui.begin("Example Window", .{})) {
+            var value: f32 = 0.0;
+            _ = zgui.sliderFloat("Adjust", .{.v = &value, .min = 0.0, .max = 1.0});
+        }
+        zgui.end();
 
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -94,7 +95,7 @@ pub fn main() !void {
         gl.BindVertexArray(cube.vao);
         gl.DrawElements(gl.TRIANGLES, @intCast(cube.index_count), gl.UNSIGNED_INT, 0);
 
-        //zgui.render();
+        zgui.render();
         win.swapBuffers();
         glfw.pollEvents();
     }

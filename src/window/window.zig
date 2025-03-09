@@ -65,14 +65,14 @@ pub fn init(title: [:0]const u8) !*glfw.Window {
     const errorCallbackResult = glfw.setErrorCallback(errorCallback);
     _ = errorCallbackResult;
 
-    const gl_major = 4;
-    const gl_minor = 5;
-    glfw.windowHint(.context_version_major, gl_major);
-    glfw.windowHint(.context_version_minor, gl_minor);
-    glfw.windowHint(.opengl_profile, .opengl_core_profile);
-    glfw.windowHint(.opengl_forward_compat, true);
-    glfw.windowHint(.client_api, .opengl_api);
-    glfw.windowHint(.doublebuffer, true);
+    //const gl_major = 4;
+    //const gl_minor = 5;
+    //glfw.windowHint(.context_version_major, gl_major);
+    //glfw.windowHint(.context_version_minor, gl_minor);
+    //glfw.windowHint(.opengl_profile, .opengl_core_profile);
+    //glfw.windowHint(.opengl_forward_compat, true);
+    //glfw.windowHint(.client_api, .opengl_api);
+    //glfw.windowHint(.doublebuffer, true);
 
     const window = try glfw.Window.create(
         @intFromFloat(DEFAULT_WIDTH),                    // Window-width

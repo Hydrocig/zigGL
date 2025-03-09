@@ -23,5 +23,13 @@
             .url = "git+https://github.com/zig-gamedev/zglfw#4d04fdac888c0f6c1c858ba343d33b19aa499cef",
             .hash = "1220ca0fc58588dbcc38ecfb7dab23f281ba55a8dc76d6efd32afd881e96ffd13605",
         },
+        .zpool = .{
+            .url = "git+https://github.com/zig-gamedev/zpool#820e0e59dc415d9784004464a6cf52223fbce126",
+            .hash = "1220e600a92d73dc8c3b5303351dcc67352114c975e59ae55de11b637ec173e75455",
+        },
+        .zgpu = .{
+            .url = "git+https://github.com/zig-gamedev/zgpu#bc10f874cf9c93e347c1298efba87be4f001fc9d",
+            .hash = "122020a116e18cad9f4ea905ca63a1505a47d680feb6edc9ebcf34795bf338f5868b",
+        },
     },
 }
