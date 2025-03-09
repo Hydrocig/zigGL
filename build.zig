@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("mach-glfw", glfw_dep.module("mach-glfw"));
 
+    // zigglgen (OpenGL bindings)
     const gl_bindings = @import("zigglgen").generateBindingsModule(b, .{
         .api = .gl,
         .version = .@"4.1",
@@ -30,6 +31,14 @@ pub fn build(b: *std.Build) void {
         .extensions = &.{ .ARB_clip_control, .NV_scissor_exclusive },
     });
     exe.root_module.addImport("gl", gl_bindings);
+
+    // zgui
+    const zgui = b.dependency("zgui", .{
+        .shared = false,
+        .with_implot = true,
+    });
+    exe.root_module.addImport("zgui", zgui.module("root"));
+    exe.linkLibrary(zgui.artifact("imgui"));
 
     exe.linkSystemLibrary("c");
     b.installArtifact(exe);

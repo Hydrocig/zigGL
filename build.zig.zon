@@ -19,5 +19,9 @@
             .hash = "12209d8a018832bee15d9da29a12fa753d89b56cd843cdf1f39501546c6467e38ba1",
         },
         .zmath = .{ .path = "./libs/zmath" },
+        .zgui = .{
+            .url = "git+https://github.com/zig-gamedev/zgui#5f0e01e8cd7f423a27ad56a712e9770a81d5d272",
+            .hash = "12209ee39f11d6100f84b848858b4048f208f70e06091ccf603879caf0e86fbd058a",
+        },
     },
 }
