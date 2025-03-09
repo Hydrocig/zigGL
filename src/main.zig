@@ -6,10 +6,16 @@ const std = @import("std");
 const gl = @import("gl");
 const zmath = @import("zmath");
 const math = @import("std").math;
+const glfw = @import("mach-glfw");
+
 const window = @import("./window/window.zig");
 const shader = @import("./graphics/shader.zig");
-const glfw = @import("mach-glfw");
 const mesh = @import("./graphics/mesh.zig");
+
+const c = @cImport({
+    @cInclude("cimgui.h");
+});
+
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -25,6 +31,9 @@ pub fn main() !void {
     // Window creation
     const win = try window.init("zigGL");
     defer win.destroy();
+
+    // Initialize Imgui
+    c.InitImgui(win.handle);
 
     // Set up window callbacks
     var state = window.WindowState{};
@@ -49,6 +58,20 @@ pub fn main() !void {
 
     // Main loop
     while (!win.shouldClose()) {
+        // Start new ImGui frame
+        c.ImGuiImplOpenGL3_NewFrame();
+        c.ImGuiImplGlfw_NewFrame();
+        c.ImGuiNewFrame();
+
+        // Simple UI
+        if (c.Button("Test Button")) {
+            std.debug.print("Button clicked!\n", .{});
+        }
+
+        var slider_value: f32 = 0.5;
+        _ = c.SliderFloat("Test Slider", &slider_value, 0.0, 1.0);
+        std.debug.print("Slider value: {d:.2}\n", .{slider_value});
+
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -74,6 +97,10 @@ pub fn main() !void {
         gl.UniformMatrix4fv(0, 1, gl.FALSE, &mvp[0][0]);
         gl.BindVertexArray(cube.vao);
         gl.DrawElements(gl.TRIANGLES, @intCast(cube.index_count), gl.UNSIGNED_INT, 0);
+
+        // Render ImGui
+        c.ImGuiRender();
+        c.ImGuiImplOpenGL3_RenderDrawData();
 
         win.swapBuffers();
         glfw.pollEvents();

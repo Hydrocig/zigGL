@@ -4,8 +4,11 @@
 /.run
 
 /.zig-cache
-/libs
 /zig-out
+
+/libs
+!/libs/cimgui.cpp
+!/libs/cimgui.h
 
 
 objects/cat.obj
