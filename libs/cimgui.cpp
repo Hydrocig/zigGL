@@ -1,3 +1,4 @@
+#include <iostream>
 #include "cimgui.h"
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
@@ -76,4 +77,66 @@ void ImGui_KeyCallback(GLFWwindow* window, int key, int scancode, int action, in
 
 void ImGui_ScrollCallback(GLFWwindow* window, double xoffset, double yoffset){
     ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
+}
+
+void ImGuiBeginGroup() {
+    ImGui::BeginGroup();
+}
+
+void ImGuiEndGroup() {
+    ImGui::EndGroup();
+}
+
+bool CollapsingHeader(const char* label, bool* p_visible, ImGuiTreeNodeFlags flags) {
+  return ImGui::CollapsingHeader(label, p_visible, flags);
+}
+
+bool CollapsingHeaderStatic(const char* label, ImGuiTreeNodeFlags flags) {
+  return ImGui::CollapsingHeader(label, flags);
+}
+
+bool RadioButton(const char* label, bool active) {
+    return ImGui::RadioButton(label, active);
+}
+
+bool Checkbox(const char* label, bool* v) {
+  return ImGui::Checkbox(label, v);
+}
+
+/*
+bool ProgressBar(float fraction, const ImVec2& size_arg, const char* overlay){
+    ImGui::ProgressBar(fraction, size_arg, overlay);
+}
+ */
+
+bool InputTextWithHint(const char* label, const char* hint, char* buf, std::size_t buf_size, ImGuiInputTextFlags flags, ImGuiInputTextCallback callback, void* user_data) {
+    return ImGui::InputTextWithHint(label, hint, buf, buf_size, flags, callback, user_data);
+}
+
+bool InputText(const char* label, char* buf, size_t buf_size, ImGuiInputTextFlags flags, ImGuiInputTextCallback callback, void* user_data) {
+    return ImGui::InputText(label, buf, buf_size, flags, callback, user_data);
+}
+
+void BulletText(const char* fmt, ...) {
+  ImGui::BulletText(fmt);
+}
+
+void SameLine(float offset_from_start_x, float spacing) {
+  ImGui::SameLine(offset_from_start_x, spacing);
+}
+
+void Text(const char* fmt, ...) {
+  ImGui::Text(fmt);
+}
+
+bool DragFloat(const char* label, float* v, float v_speed, float v_min, float v_max, const char* format, ImGuiSliderFlags flags){
+  return ImGui::DragFloat(label, v, v_speed, v_min, v_max, format, flags);
+}
+
+void NewLine() {
+  ImGui::NewLine();
+}
+
+void Separator(){
+  ImGui::Separator();
 }
