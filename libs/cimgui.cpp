@@ -3,6 +3,8 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 
+struct GLFWwindow;
+
 void InitImgui(void* window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -58,4 +60,20 @@ void ImGuiRender() {
 
 void ImGuiImplOpenGL3_RenderDrawData() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void ImGui_MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+}
+
+void ImGui_CursorPosCallback(GLFWwindow* window, double x, double y) {
+    ImGui_ImplGlfw_CursorPosCallback(window, x, y);
+}
+
+void ImGui_KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
+}
+
+void ImGui_ScrollCallback(GLFWwindow* window, double xoffset, double yoffset){
+    ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
 }

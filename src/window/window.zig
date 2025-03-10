@@ -9,6 +9,10 @@ const glfw = @import("mach-glfw");
 const zmath = @import("zmath");
 const gl = @import("gl");
 
+const c = @cImport({
+    @cInclude("cimgui.h");
+});
+
 var gl_proc_table: gl.ProcTable = undefined;
 
 const DEFAULT_WIDTH: f32 = 800;     // Initial window width
@@ -109,6 +113,8 @@ pub fn setupCallbacks(window: glfw.Window, state: *WindowState) void {
 fn cursorCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
 
+    c.ImGui_CursorPosCallback(@ptrCast(window.handle), xpos, ypos); // Cpp glfw callback
+
     state.mouse.x = xpos;
     state.mouse.y = ypos;
 }
@@ -118,6 +124,8 @@ fn cursorCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
 fn mouseCallback(window: glfw.Window, button: glfw.MouseButton, action: glfw.Action, mods: glfw.Mods) void {
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
     state.keys = .none;
+
+    c.ImGui_MouseButtonCallback(@ptrCast(window.handle), @intFromEnum(button), @intFromEnum(action), mods.toInt(c_int)); // Cpp glfw callback
 
     // Left mouse button pressed with shift key -> dragging
     if (button == .left and mods.shift == true) {
@@ -140,6 +148,8 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.A
     _ = &window;
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
 
+    c.ImGui_KeyCallback(@ptrCast(window.handle), @intFromEnum(key), scancode, @intFromEnum(action), mods.toInt(c_int)); // Cpp glfw callback
+
     // Set key union based on key pressed
     if (action == .press and mods.control == false and mods.shift == false) {
         state.keys = switch (key) {
@@ -160,6 +170,8 @@ fn scrollCallback(window: glfw.Window, xoffset: f64, yoffset: f64) void {
     _ = &xoffset;
     _ = &window;
     const state: *WindowState = window.getUserPointer(WindowState).?; // Retrieve the window state
+
+    c.ImGui_ScrollCallback(@ptrCast(window.handle), xoffset, yoffset); // Cpp glfw callback
 
     state.scroll += yoffset;
 }

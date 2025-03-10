@@ -56,6 +56,8 @@ pub fn main() !void {
     var translation = zmath.identity();                                 // Translation matrix
     var scale = zmath.identity();                                       // Scale matrix
 
+    var slider_value: f32 = 0.5;
+
     // Main loop
     while (!win.shouldClose()) {
         // Start new ImGui frame
@@ -68,9 +70,7 @@ pub fn main() !void {
             std.debug.print("Button clicked!\n", .{});
         }
 
-        var slider_value: f32 = 0.5;
         _ = c.SliderFloat("Test Slider", &slider_value, 0.0, 1.0);
-        std.debug.print("Slider value: {d:.2}\n", .{slider_value});
 
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);

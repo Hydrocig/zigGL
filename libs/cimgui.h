@@ -4,9 +4,10 @@
 extern "C" {
 #endif
 
-#include <stdbool.h> // For bool type
+#include <stdbool.h>
 
-    // Expose IMGUI_CHECKVERSION
+    struct GLFWwindow;
+
     void ImGuiCheckVersion();
 
     // Expose ImGui implementation functions
@@ -15,6 +16,12 @@ extern "C" {
     void ImGuiNewFrame();
     void ImGuiRender();
     void ImGuiImplOpenGL3_RenderDrawData();
+
+    // Callbacks
+    void ImGui_MouseButtonCallback(struct GLFWwindow* window, int button, int action, int mods);
+    void ImGui_CursorPosCallback(struct GLFWwindow* window, double x, double y);
+    void ImGui_KeyCallback(struct GLFWwindow* window, int key, int scancode, int action, int mods);
+    void ImGui_ScrollCallback(struct GLFWwindow* window, double xoffset, double yoffset);
 
     // Other functions
     void InitImgui(void* window);
