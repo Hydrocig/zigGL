@@ -18,6 +18,8 @@ var gl_proc_table: gl.ProcTable = undefined;
 const DEFAULT_WIDTH: f32 = 800;     // Initial window width
 const DEFAULT_HEIGHT: f32 = 800;    // Initial window height
 
+var keyPressed: bool = false; // Debounce overlay visibility
+
 /// Window state struct
 ///
 /// Contains:
@@ -25,12 +27,14 @@ const DEFAULT_HEIGHT: f32 = 800;    // Initial window height
 /// - mouse state struct
 /// - key state union
 /// - scroll value
+/// - overlayVisible state (Debounce)
 pub const WindowState = struct {
     width: f32 = DEFAULT_WIDTH,
     height: f32 = DEFAULT_HEIGHT,
     mouse: MouseState = .{},
     keys: KeyState = .none,
     scroll: f64 = 0,
+    overlayVisible: bool = false,
 };
 
 /// Mouse state struct
@@ -161,6 +165,16 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.A
         };
     } else if (action == .release) {
         state.keys = .none;
+    }
+
+    // Toggle overlay visibility
+    if (key == .o and action == .press) {
+        if(!keyPressed) {
+            state.overlayVisible = !state.overlayVisible;
+            keyPressed = true;
+        }
+    } else if (key == .o and action == .release) {
+        keyPressed = false;
     }
 }
 
