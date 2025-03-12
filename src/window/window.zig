@@ -19,6 +19,11 @@ var gl_proc_table: gl.ProcTable = undefined;
 const DEFAULT_WIDTH: f32 = 800;     // Initial window width
 const DEFAULT_HEIGHT: f32 = 800;    // Initial window height
 
+const OVERLAY_KEY: glfw.Key = .o;
+const OVERLAY_MODS: glfw.Mods = .{
+    .control = true,
+};
+
 var keyPressed: bool = false; // Debounce overlay visibility
 
 /// Window state struct
@@ -169,14 +174,19 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.A
     }
 
     // Toggle overlay visibility
-    if (key == .o and action == .press) {
+    if (key == OVERLAY_KEY and modsEqual(mods, OVERLAY_MODS) and action == .press) {
         if(!keyPressed) {
             state.overlayState.visible = !state.overlayState.visible;
             keyPressed = true;
         }
-    } else if (key == .o and action == .release) {
+    } else if (key == OVERLAY_KEY and modsEqual(mods, OVERLAY_MODS) and action == .release) {
         keyPressed = false;
     }
+}
+
+/// Check if two glfw mods are equal
+fn modsEqual(a: glfw.Mods, b: glfw.Mods) bool {
+    return @as(u8, @bitCast(a)) == @as(u8, @bitCast(b));
 }
 
 /// GLFW scroll callback
