@@ -269,7 +269,22 @@ fn handleUi() void {
 
     // Reset button
     c.ImGuiBeginGroup();
-    if (c.Button("Reset")) {}
+    if (c.Button("Reset")) {
+        // Position variables
+        xPosGui= 1.0;
+        yPosGui= 1.0;
+        zPosGui= 1.0;
+
+        // Rotation variables
+        xDegGui = 0.0;
+        yDegGui = 0.0;
+        zDegGui = 0.0;
+
+        // Scale variable
+        scaleGui = 1.0;
+
+        manualEdit = false;
+    }
     c.NewLine();
     c.ImGuiEndGroup();
 }
