@@ -1,0 +1,145 @@
+//! UI Overlay
+//!
+//! OverlayState struct for storing overlay state
+//! ImGui initialization and rendering functions
+//! ImGui UI elements
+
+const std = @import("std");
+const glfw = @import("mach-glfw");
+const zmath = @import("zmath");
+
+const window = @import("../window/window.zig");
+const c = @cImport({
+    @cInclude("cimgui.h");
+});
+
+/// OverlayState struct
+///
+/// Contains:
+/// - position, rotation, scale (transformations)
+/// - objPath, mtlPath (file paths)
+/// - manualEdit (flag for manual transformation editing)
+/// - visible (flag for overlay visibility)
+pub const OverlayState = struct {
+    // Transformation
+    position: [3]f32 = .{0.0, 0.0, 0.0},
+    rotation: [3]f32 = .{0.0, 0.0, 0.0},
+    scale: f32 = 1.0,
+
+    // File paths
+    objPath: [128]u8 = [_]u8{0} ** 128,
+    mtlPath: [128]u8 = [_]u8{0} ** 128,
+
+    // State flags
+    manualEdit: bool = false,
+    visible: bool = false,
+};
+
+/// Initializes ImGui context
+pub fn init(win: *const glfw.Window) void {
+    c.InitImgui(win.handle);
+}
+
+/// Begins new UI frame
+pub fn beginFrame() void {
+    c.ImGuiImplOpenGL3_NewFrame();
+    c.ImGuiImplGlfw_NewFrame();
+    c.ImGuiNewFrame();
+}
+
+/// Ends UI frame and renders
+pub fn endFrame() void {
+    c.ImGuiRender();
+    c.ImGuiImplOpenGL3_RenderDrawData();
+}
+
+/// Main UI rendering function
+pub fn draw(state: *window.WindowState) void {
+    // Don't render if overlay is not visible
+    if (!state.overlayState.visible) {
+        return;
+    }
+
+    filePanel(&state.overlayState);
+    transformationPanel(&state.overlayState);
+    resetButton(&state.overlayState);
+}
+
+/// UI part that handles file loading from .obj and .mtl paths
+fn filePanel(state: *OverlayState) void {
+    c.ImGuiBeginGroup();
+    defer c.ImGuiEndGroup();
+
+    // OBJ file path
+    c.Text("OBJ");
+    c.SameLine(0, 18);
+    _ = c.InputTextWithHint("##obj", "Path to .obj file", &state.objPath, state.objPath.len, 0, null, null);
+
+    // MTL file path
+    c.Text("MTL");
+    c.SameLine(0, 18);
+    _ = c.InputTextWithHint("##mtl", "Path to .mtl file", &state.mtlPath, state.mtlPath.len, 0, null, null);
+
+    // Load button
+    if (c.Button("Load")) {
+        // Load files
+    }
+    c.Separator();
+}
+
+/// UI part that handles transformation editing
+fn transformationPanel(state: *OverlayState) void {
+    c.ImGuiBeginGroup();
+    defer c.ImGuiEndGroup();
+
+    if (c.CollapsingHeaderStatic("Transformation", 0)) {
+        _ = c.Checkbox("Enable ", &state.manualEdit); // Enable manual editing checkbox
+
+        if (c.CollapsingHeader("Position", &state.manualEdit, 0)) {
+            // x position
+            c.Text("x:"); c.SameLine(0, 10);
+            _ = c.DragFloat("##xPos", &state.position[0], 0.01, -500.0, 500.0, "%.02f", 0);
+            // y position
+            c.Text("y:"); c.SameLine(0, 10);
+            _ = c.DragFloat("##yPos", &state.position[1], 0.01, -500.0, 500.0, "%.02f", 0);
+            // z position
+            c.Text("z:"); c.SameLine(0, 10);
+            _ = c.DragFloat("##zPos", &state.position[2], 0.01, -500.0, 500.0, "%.02f", 0);
+
+            c.NewLine();
+        }
+        if (c.CollapsingHeader("Rotation", &state.manualEdit, 0)) {
+            // x rotation
+            c.Text("x:"); c.SameLine(0, 10);
+            _ = c.DragFloat("##xDeg", &state.rotation[0], 0.01, -360.0, 360.0, "%.01f °", 0);
+            // y rotation
+            c.Text("y:"); c.SameLine(0, 10);
+            _ = c.DragFloat("##yDeg", &state.rotation[1], 0.01, -360.0, 360.0, "%.01f °", 0);
+            // z rotation
+            c.Text("z:"); c.SameLine(0, 10);
+            _ = c.DragFloat("##zDeg", &state.rotation[2], 0.01, -360.0, 360.0, "%.01f °", 0);
+
+            c.NewLine();
+        }
+        if (c.CollapsingHeader("Scale", &state.manualEdit, 0)) {
+            c.Text("Scale: "); c.SameLine(0, 10);
+            _ = c.DragFloat("##scale", &state.scale, 0.01, 0.0, 500.0, "%.02f", 0);
+
+            c.NewLine();
+        }
+    }
+    c.Separator();
+}
+
+/// UI part that handles reset button
+fn resetButton(state: *OverlayState) void {
+    c.ImGuiBeginGroup();
+    defer c.ImGuiEndGroup();
+
+    if (c.Button("Reset")) {
+        state.position = .{1.0, 1.0, 1.0};
+        state.rotation = .{0.0, 0.0, 0.0};
+        state.scale = 1.0;
+        state.manualEdit = false;
+    }
+}

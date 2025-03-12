@@ -7,6 +7,7 @@
 const std = @import("std");
 const glfw = @import("mach-glfw");
 const zmath = @import("zmath");
+const overlay = @import("../ui/overlay.zig");
 const gl = @import("gl");
 
 const c = @cImport({
@@ -26,15 +27,15 @@ var keyPressed: bool = false; // Debounce overlay visibility
 /// - width and height of the window
 /// - mouse state struct
 /// - key state union
+/// - overlayState
 /// - scroll value
-/// - overlayVisible state (Debounce)
 pub const WindowState = struct {
     width: f32 = DEFAULT_WIDTH,
     height: f32 = DEFAULT_HEIGHT,
     mouse: MouseState = .{},
+    overlayState: overlay.OverlayState = .{},
     keys: KeyState = .none,
     scroll: f64 = 0,
-    overlayVisible: bool = false,
 };
 
 /// Mouse state struct
@@ -170,7 +171,7 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, scancode: i32, action: glfw.A
     // Toggle overlay visibility
     if (key == .o and action == .press) {
         if(!keyPressed) {
-            state.overlayVisible = !state.overlayVisible;
+            state.overlayState.visible = !state.overlayState.visible;
             keyPressed = true;
         }
     } else if (key == .o and action == .release) {

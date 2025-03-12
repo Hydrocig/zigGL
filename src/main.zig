@@ -11,31 +11,11 @@ const glfw = @import("mach-glfw");
 const window = @import("./window/window.zig");
 const shader = @import("./graphics/shader.zig");
 const mesh = @import("./graphics/mesh.zig");
+const overlay = @import("./ui/overlay.zig");
 
 const c = @cImport({
     @cInclude("cimgui.h");
 });
-
-// -- ImGui variables initialization --
-var imguiVisible: bool = false; // Overlay visibility
-
-var objTextBuffer: [128]u8 = undefined; // Buffor for obj Text input
-var MtlTextBuffer: [128]u8 = undefined; // Buffor for mtl Text input
-
-var manualEdit: bool = false; // Manual editing possible
-
-// Position variables
-var xPosGui: f32 = 1.0;
-var yPosGui: f32 = 1.0;
-var zPosGui: f32 = 1.0;
-
-// Rotation variables
-var xDegGui: f32 = 0.0;
-var yDegGui: f32 = 0.0;
-var zDegGui: f32 = 0.0;
-
-// Scale variable
-var scaleGui: f32 = 1.0;
 
 
 pub fn main() !void {
@@ -77,19 +57,10 @@ pub fn main() !void {
     var translation = zmath.identity();                                 // Translation matrix
     var scale = zmath.identity();                                       // Scale matrix
 
-    @memset(&objTextBuffer, 0);
-    @memset(&MtlTextBuffer, 0);
-
     // Main loop
     while (!win.shouldClose()) {
-        // Start new ImGui frame
-        c.ImGuiImplOpenGL3_NewFrame();
-        c.ImGuiImplGlfw_NewFrame();
-        c.ImGuiNewFrame();
-
-        if(state.overlayVisible){
-            handleUi();
-        }
+        overlay.beginFrame(); // Start new ImGui frame
+        overlay.draw(&state); // Draw frame
 
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -117,9 +88,7 @@ pub fn main() !void {
         gl.BindVertexArray(cube.vao);
         gl.DrawElements(gl.TRIANGLES, @intCast(cube.index_count), gl.UNSIGNED_INT, 0);
 
-        // Render ImGui
-        c.ImGuiRender();
-        c.ImGuiImplOpenGL3_RenderDrawData();
+        overlay.endFrame(); // Render ImGui
 
         win.swapBuffers();
         glfw.pollEvents();
@@ -129,9 +98,7 @@ pub fn main() !void {
 /// Update the rotation, translation, and scale matrices
 /// Values come from the window state (mouse and keyboard input from callbacks)
 fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath.Mat, state: *window.WindowState) void {
-    if(manualEdit){
-        return;
-    }
+    if(state.overlayState.manualEdit)return; // Dont transform if overlay is visible
 
     // Handle rotation
     if (state.mouse.dragging) {
@@ -225,66 +192,4 @@ fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath
         // No relevant input
         .none => {},
     }
-}
-
-fn handleUi() void {
-    // Top group with OBJ and MTL input
-    c.ImGuiBeginGroup();
-    c.Text("OBJ"); c.SameLine(0, 18);
-    _ = c.InputTextWithHint("##obj", "Path to .obj file", &objTextBuffer, objTextBuffer.len, 0, null, null);
-    c.Text("MTL"); c.SameLine(0, 18);
-    _ = c.InputTextWithHint("##mtl", "Path to .mtl file", &MtlTextBuffer, MtlTextBuffer.len, 0, null, null);
-    _ = c.Button("Load");
-    c.Separator();
-    c.ImGuiEndGroup();
-
-    // Transformation group
-    c.ImGuiBeginGroup();
-    if(c.CollapsingHeaderStatic("Transformation", 0)) {
-        _ = c.Checkbox("Enable ", &manualEdit);
-
-        if(c.CollapsingHeader("Position", &manualEdit, 0)) {
-            c.Text("x:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##xPos", &xPosGui, 0.01, -500.0, 500.0, "%.02f", 0);
-            c.Text("y:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##yPos", &yPosGui, 0.01, -500.0, 500.0, "%.02f", 0);
-            c.Text("z:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##zPos", &zPosGui, 0.01, -500.0, 500.0, "%.02f", 0);
-        }
-        if(c.CollapsingHeader("Rotation", &manualEdit, 0)) {
-            c.Text("x:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##xDeg", &xDegGui, 0.01, -360.0, 360.0, "%.01f °", 0);
-            c.Text("y:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##yDeg", &yDegGui, 0.01, -360.0, 360.0, "%.01f °", 0);
-            c.Text("z:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##zDeg", &zDegGui, 0.01, -360.0, 360.0, "%.01f °", 0);
-        }
-        if(c.CollapsingHeader("Scale", &manualEdit, 0)) {
-            c.Text("Scale: "); c.SameLine(0, 10);
-            _ = c.DragFloat("##scale", &scaleGui, 0.01, 0.0, 500.0, "%.02f", 0);
-        }
-    }
-    c.Separator();
-    c.ImGuiEndGroup();
-
-    // Reset button
-    c.ImGuiBeginGroup();
-    if (c.Button("Reset")) {
-        // Position variables
-        xPosGui= 1.0;
-        yPosGui= 1.0;
-        zPosGui= 1.0;
-
-        // Rotation variables
-        xDegGui = 0.0;
-        yDegGui = 0.0;
-        zDegGui = 0.0;
-
-        // Scale variable
-        scaleGui = 1.0;
-
-        manualEdit = false;
-    }
-    c.NewLine();
-    c.ImGuiEndGroup();
 }
