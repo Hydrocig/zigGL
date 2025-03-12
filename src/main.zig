@@ -17,7 +17,7 @@ const c = @cImport({
     @cInclude("cimgui.h");
 });
 
-
+/// Main method
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -40,9 +40,8 @@ pub fn main() !void {
     var state = window.WindowState{};
     window.setupCallbacks(win, &state);
 
-    // Load mesh
-    const cube = try mesh.load(allocator, "objects/cube2.obj");
-    defer cube.deinit();
+    // Load default mesh (cube)
+    try mesh.Mesh.init();
 
     // Compile shaders
     const program = try shader.compile(allocator,
@@ -60,7 +59,7 @@ pub fn main() !void {
     // Main loop
     while (!win.shouldClose()) {
         overlay.beginFrame(); // Start new ImGui frame
-        overlay.draw(&state); // Draw frame
+        try overlay.draw(&state); // Draw frame
 
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -85,8 +84,8 @@ pub fn main() !void {
         const mvp = zmath.mul(zmath.mul(scale, rotation), zmath.mul(translation, zmath.mul(view, proj)));
 
         gl.UniformMatrix4fv(0, 1, gl.FALSE, &mvp[0][0]);
-        gl.BindVertexArray(cube.vao);
-        gl.DrawElements(gl.TRIANGLES, @intCast(cube.index_count), gl.UNSIGNED_INT, 0);
+        gl.BindVertexArray(mesh.loadedObject.vao);
+        gl.DrawElements(gl.TRIANGLES, @intCast(mesh.loadedObject.index_count), gl.UNSIGNED_INT, 0);
 
         overlay.endFrame(); // Render ImGui
 

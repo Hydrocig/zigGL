@@ -8,6 +8,9 @@ const std = @import("std");
 const glfw = @import("mach-glfw");
 const zmath = @import("zmath");
 
+const errors = @import("../util/errors.zig");
+const validator = @import("../util/validator.zig");
+const mesh = @import("../graphics/mesh.zig");
 const window = @import("../window/window.zig");
 const c = @cImport({
     @cInclude("cimgui.h");
@@ -27,8 +30,8 @@ pub const OverlayState = struct {
     scale: f32 = 1.0,
 
     // File paths
-    objPath: [128]u8 = [_]u8{0} ** 128,
-    mtlPath: [128]u8 = [_]u8{0} ** 128,
+    objPath: [256]u8 = [_]u8{0} ** 256,
+    mtlPath: [256]u8 = [_]u8{0} ** 256,
 
     // State flags
     manualEdit: bool = false,
@@ -54,19 +57,19 @@ pub fn endFrame() void {
 }
 
 /// Main UI rendering function
-pub fn draw(state: *window.WindowState) void {
+pub fn draw(state: *window.WindowState) !void {
     // Don't render if overlay is not visible
     if (!state.overlayState.visible) {
         return;
     }
 
-    filePanel(&state.overlayState);
+    try filePanel(&state.overlayState);
     transformationPanel(&state.overlayState);
     resetButton(&state.overlayState);
 }
 
 /// UI part that handles file loading from .obj and .mtl paths
-fn filePanel(state: *OverlayState) void {
+fn filePanel(state: *OverlayState) !void {
     c.ImGuiBeginGroup();
     defer c.ImGuiEndGroup();
 
@@ -82,9 +85,20 @@ fn filePanel(state: *OverlayState) void {
 
     // Load button
     if (c.Button("Load")) {
-        // Load files
+        try loadNewObject(&state.objPath, &state.mtlPath);
     }
     c.Separator();
+}
+
+/// Loads new object from .obj and .mtl paths
+fn loadNewObject(objPath: []const u8, mtlPath: []const u8) !void{
+    _ = mtlPath;
+
+    mesh.deinit(); // Unload current object
+
+    const cleanObjPath = try validator.cleanPath(objPath);
+
+    try mesh.load(cleanObjPath);
 }
 
 /// UI part that handles transformation editing

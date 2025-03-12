@@ -21,6 +21,10 @@ pub const Mesh = struct {
     ebo: gl.uint,
     index_count: usize,
 
+    pub fn init() !void {
+        try load("objects/cube.obj"); // Load default cube
+    }
+
     /// Deinitialize the mesh (vao, vbo, ebo)
     pub fn deinit(self: Mesh) void {
         var vaoArr: [1]gl.uint = .{self.vao};
@@ -33,8 +37,13 @@ pub const Mesh = struct {
         }
 };
 
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
+
+pub var loadedObject: Mesh = undefined;
+
 /// Load the mesh from the .obj file using the objectLoader
-pub fn load(allocator: std.mem.Allocator, path: []const u8) !Mesh {
+pub fn load(path: []const u8) !void {
     // Load object
     var obj = try objectLoader.load(path, allocator);
     defer obj.deinit();
@@ -64,7 +73,8 @@ pub fn load(allocator: std.mem.Allocator, path: []const u8) !Mesh {
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, @sizeOf(f32) * 3, 0);
     gl.EnableVertexAttribArray(0); // Enables the vertex attribute (inside the vertex shader)
 
-    return Mesh{
+    // Set the currently loaded object
+    loadedObject = Mesh{
         .vao = vao,
         .vbo = vbo,
         .ebo = ebo,
@@ -72,9 +82,14 @@ pub fn load(allocator: std.mem.Allocator, path: []const u8) !Mesh {
     };
 }
 
+/// Deinitialize/unload the mesh
+pub fn deinit() void {
+    Mesh.deinit(loadedObject);
+}
+
 /// Convert faces to indices
-fn convertFaces(faces: []const objectLoader.Face, allocator: std.mem.Allocator) ![]u32 {
-    const indices = try allocator.alloc(u32, faces.len * 3);
+fn convertFaces(faces: []const objectLoader.Face, faceAllocator: std.mem.Allocator) ![]u32 {
+    const indices = try faceAllocator.alloc(u32, faces.len * 3);
     for (faces, 0..) |face, i| {
         indices[i*3] = @intCast(face.face[0]);
         indices[i*3+1] = @intCast(face.face[1]);
