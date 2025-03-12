@@ -98,7 +98,9 @@ pub fn main() !void {
 /// Update the rotation, translation, and scale matrices
 /// Values come from the window state (mouse and keyboard input from callbacks)
 fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath.Mat, state: *window.WindowState) void {
-    if(state.overlayState.manualEdit)return; // Dont transform if overlay is visible
+    if(state.overlayState.manualEdit) {
+        updateTransformsOverlay(rotation, translation, scale, state);
+    }
 
     // Handle rotation
     if (state.mouse.dragging) {
@@ -192,4 +194,28 @@ fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath
         // No relevant input
         .none => {},
     }
+}
+
+fn updateTransformsOverlay(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath.Mat, state: *window.WindowState) void {
+    // Position
+    var newTranslation = translation.*;
+    newTranslation[3][0] = @as(f32, state.overlayState.position[0]);
+    newTranslation[3][1] = @as(f32, state.overlayState.position[1]);
+    newTranslation[3][2] = @as(f32, state.overlayState.position[2]);
+    translation.* = newTranslation;
+
+    // Scale
+    scale.* = zmath.scaling(state.overlayState.scale, state.overlayState.scale, state.overlayState.scale);
+
+    // Rotation
+    // Degrees to radians
+    const xRad = state.overlayState.rotation[0] * (math.pi / 180.0);
+    const yRad = state.overlayState.rotation[1] * (math.pi / 180.0);
+    const zRad = state.overlayState.rotation[2] * (math.pi / 180.0);
+
+    // New rotations
+    const rotX = zmath.rotationX(xRad);
+    const rotY = zmath.rotationY(yRad);
+    const rotZ = zmath.rotationZ(zRad);
+    rotation.* = zmath.mul(zmath.mul(rotZ, rotY), rotX);
 }

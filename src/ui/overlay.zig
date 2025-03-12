@@ -98,32 +98,33 @@ fn transformationPanel(state: *OverlayState) void {
         if (c.CollapsingHeader("Position", &state.manualEdit, 0)) {
             // x position
             c.Text("x:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##xPos", &state.position[0], 0.01, -500.0, 500.0, "%.02f", 0);
+            _ = c.DragFloat("##xPos", &state.position[0], 0.007, -500.0, 500.0, "%.02f", 0);
             // y position
             c.Text("y:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##yPos", &state.position[1], 0.01, -500.0, 500.0, "%.02f", 0);
+            _ = c.DragFloat("##yPos", &state.position[1], 0.007, -500.0, 500.0, "%.02f", 0);
             // z position
             c.Text("z:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##zPos", &state.position[2], 0.01, -500.0, 500.0, "%.02f", 0);
+            _ = c.DragFloat("##zPos", &state.position[2], 0.007, -500.0, 500.0, "%.02f", 0);
 
             c.NewLine();
         }
         if (c.CollapsingHeader("Rotation", &state.manualEdit, 0)) {
             // x rotation
             c.Text("x:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##xDeg", &state.rotation[0], 0.01, -360.0, 360.0, "%.01f °", 0);
+            _ = c.DragFloat("##xDeg", &state.rotation[0], 0.07, -360.0, 360.0, "%.01f °", 0);
             // y rotation
             c.Text("y:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##yDeg", &state.rotation[1], 0.01, -360.0, 360.0, "%.01f °", 0);
+            _ = c.DragFloat("##yDeg", &state.rotation[1], 0.07, -360.0, 360.0, "%.01f °", 0);
             // z rotation
             c.Text("z:"); c.SameLine(0, 10);
-            _ = c.DragFloat("##zDeg", &state.rotation[2], 0.01, -360.0, 360.0, "%.01f °", 0);
+            _ = c.DragFloat("##zDeg", &state.rotation[2], 0.07, -360.0, 360.0, "%.01f °", 0);
 
             c.NewLine();
         }
         if (c.CollapsingHeader("Scale", &state.manualEdit, 0)) {
+            // Scale
             c.Text("Scale: "); c.SameLine(0, 10);
-            _ = c.DragFloat("##scale", &state.scale, 0.01, 0.0, 500.0, "%.02f", 0);
+            _ = c.DragFloat("##scale", &state.scale, 0.004, 0.1, 500.0, "%.02f", 0);
 
             c.NewLine();
         }
@@ -137,9 +138,8 @@ fn resetButton(state: *OverlayState) void {
     defer c.ImGuiEndGroup();
 
     if (c.Button("Reset")) {
-        state.position = .{1.0, 1.0, 1.0};
+        state.position = .{0.0, 0.0, 0.0};
         state.rotation = .{0.0, 0.0, 0.0};
         state.scale = 1.0;
-        state.manualEdit = false;
     }
 }
