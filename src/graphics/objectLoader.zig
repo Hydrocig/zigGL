@@ -7,6 +7,8 @@ const io = std.io;
 const mem = std.mem;
 
 const std = @import("std");
+const zstbi = @import("zstbi");
+
 const validator = @import("../util/validator.zig");
 
 var endOfMtl: bool = false; // Flag to stop parsing .mtl file
@@ -54,12 +56,14 @@ pub const ObjectStruct = struct {
 /// - diffuse: diffuse color
 /// - specular: specular color
 /// - texturePath: path to the texture
+/// - texture: zstbi.Image struct
 pub const Material = struct {
-    name: []const u8,           // o
-    ambient: [3]f32,            // Ka
-    diffuse: [3]f32,            // Kd
-    specular: [3]f32,           // Ks
-    texturePath: ?[]const u8,   // map_Kd
+    name: []const u8,               // o
+    ambient: [3]f32,                // Ka
+    diffuse: [3]f32,                // Kd
+    specular: [3]f32,               // Ks
+    texturePath: ?[]const u8,       // map_Kd
+    texture: ?zstbi.Image = undefined,
 };
 
 /// Load the .obj file
@@ -267,6 +271,15 @@ fn handleSpecular(content: []const u8, obj: *ObjectStruct) !void {
 /// Handle the texture path of the material
 fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
     obj.material.texturePath = content;
+
+    if (obj.material.texturePath.?.len != undefined) {
+        // Convert to null-terminated string
+        const texture_path_z = try obj.allocator.dupeZ(u8, content);
+
+        // Load the texture from the file with given path and 4 channels (RGBA)
+        obj.material.texture = try zstbi.Image.loadFromFile(texture_path_z, 4);
+        std.log.info("Texture loaded successfully!", .{});
+    }
 }
 
 /// Add the object name to the object struct
