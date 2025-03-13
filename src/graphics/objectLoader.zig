@@ -97,18 +97,23 @@ fn handleObjectName(content: []const u8, obj: *ObjectStruct) !void {
 
 /// Add a vertex to the object struct
 fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
-    var components = mem.split(u8, content, " "); // Split the content into its components
+    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
 
     // Parse the components into the vertex struct components (x, y, z)
     const x_str = components.next() orelse return error.InvalidVertex;
     const y_str = components.next() orelse return error.InvalidVertex;
     const z_str = components.next() orelse return error.InvalidVertex;
 
+    // Trim any potential whitespace from the strings before parsing
+    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
+    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
+    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+
     // Add the parsed components to the vertex struct
     const vertex = Vertex{ .position = .{
-        try std.fmt.parseFloat(f32, x_str),
-        try std.fmt.parseFloat(f32, y_str),
-        try std.fmt.parseFloat(f32, z_str),
+        try std.fmt.parseFloat(f32, x_trimmed),
+        try std.fmt.parseFloat(f32, y_trimmed),
+        try std.fmt.parseFloat(f32, z_trimmed),
     } };
 
     try obj.vbo.append(vertex);
