@@ -16,6 +16,10 @@ pub fn build(b: *std.Build) void {
     const zmath = b.dependency("zmath", .{});
     exe.root_module.addImport("zmath", zmath.module("root"));
 
+    // zstbi
+    const zstbi = b.dependency("zstbi", .{});
+    exe.root_module.addImport("zstbi", zstbi.module("root"));
+
     // mach-glfw
     const glfw_dep = b.dependency("mach_glfw", .{
         .target = target,
@@ -51,8 +55,8 @@ pub fn build(b: *std.Build) void {
     exe.addCSourceFile(.{ .file = b.path("libs/imgui/imgui_widgets.cpp"), .flags = &.{"-std=c++11"} });
     exe.addCSourceFile(.{ .file = b.path("libs/imgui/backends/imgui_impl_glfw.cpp"), .flags = &.{"-std=c++11"} });
     exe.addCSourceFile(.{ .file = b.path("libs/imgui/backends/imgui_impl_opengl3.cpp"), .flags = &.{"-std=c++11"} });
-    
-    exe.addCSourceFile(.{.file = b.path("libs/cimgui.cpp"), .flags = &.{"-std=c++11"}});
+
+    exe.addCSourceFile(.{ .file = b.path("libs/cimgui.cpp"), .flags = &.{"-std=c++11"} });
     exe.addIncludePath(b.path("libs"));
 
     exe.linkSystemLibrary("glfw3"); // Link against glfw3.lib

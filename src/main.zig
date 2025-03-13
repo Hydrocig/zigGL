@@ -6,6 +6,7 @@ const std = @import("std");
 const gl = @import("gl");
 const zmath = @import("zmath");
 const math = @import("std").math;
+const zstbi = @import("zstbi");
 const glfw = @import("mach-glfw");
 
 const window = @import("./window/window.zig");
@@ -21,6 +22,10 @@ const c = @cImport({
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
+
+    // Zstbi initialization
+    zstbi.init(allocator);
+    defer zstbi.deinit();
 
     // GLFW initialization
     if (!glfw.init(.{})) {
