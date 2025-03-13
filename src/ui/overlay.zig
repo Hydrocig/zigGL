@@ -23,6 +23,7 @@ const c = @cImport({
 /// - objPath, mtlPath (file paths)
 /// - manualEdit (flag for manual transformation editing)
 /// - visible (flag for overlay visibility)
+/// - errorMessage
 pub const OverlayState = struct {
     // Transformation
     position: [3]f32 = .{0.0, 0.0, 0.0},
@@ -36,6 +37,23 @@ pub const OverlayState = struct {
     // State flags
     manualEdit: bool = false,
     visible: bool = false,
+
+    // Error message
+    errorMessage: [128]u8 = [_]u8{0} ** 128,
+
+    /// Helper method to set error message
+    pub fn setErrorMessage(self: *OverlayState, msg: []const u8) void {
+        std.mem.copyForwards(u8, &self.errorMessage, msg);
+        // Add null terminator for C strings
+        if (msg.len < self.errorMessage.len) {
+            self.errorMessage[msg.len] = 0;
+        }
+    }
+
+    /// Helper to get C-compatible error message pointer
+    pub fn getErrorMessagePtr(self: *const OverlayState) [*c]const u8 {
+        return @ptrCast(&self.errorMessage);
+    }
 };
 
 /// Initializes ImGui context
@@ -85,20 +103,27 @@ fn filePanel(state: *OverlayState) !void {
 
     // Load button
     if (c.Button("Load")) {
-        try loadNewObject(&state.objPath, &state.mtlPath);
+        try loadNewObject(&state.objPath, &state.mtlPath, state);
     }
+    c.SameLine(10, 35);
+    c.TextColoredRGBA(1, 0, 0, 1, state.getErrorMessagePtr()); // Red RGBA
     c.Separator();
 }
 
 /// Loads new object from .obj and .mtl paths
-fn loadNewObject(objPath: []const u8, mtlPath: []const u8) !void{
+fn loadNewObject(objPath: []const u8, mtlPath: []const u8, state: *OverlayState) !void{
     _ = mtlPath;
+
+    // Clean and validate obj path
+    const cleanObjPath = validator.cleanPath(objPath);
+    if (!cleanObjPath.isValid()) {
+        state.setErrorMessage(cleanObjPath.getErrorMessage()); // Display error message
+        return;
+    }
 
     mesh.deinit(); // Unload current object
 
-    const cleanObjPath = try validator.cleanPath(objPath);
-
-    try mesh.load(cleanObjPath);
+    try mesh.load(cleanObjPath.value.?);
 }
 
 /// UI part that handles transformation editing

@@ -6,6 +6,9 @@
 
 struct GLFWwindow;
 
+const ImVec4 RED = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+const ImVec4 GREEN = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+
 void InitImgui(void* window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -127,6 +130,11 @@ void SameLine(float offset_from_start_x, float spacing) {
 
 void Text(const char* fmt, ...) {
   ImGui::Text(fmt);
+}
+
+void TextColoredRGBA(float r, float g, float b, float a, const char* fmt, ...) {
+  ImVec4 col = ImVec4(r, g, b, a);
+  ImGui::TextColored(col, fmt);
 }
 
 bool DragFloat(const char* label, float* v, float v_speed, float v_min, float v_max, const char* format, ImGuiSliderFlags flags){

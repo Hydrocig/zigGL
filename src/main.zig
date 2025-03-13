@@ -195,6 +195,7 @@ fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath
     }
 }
 
+/// Update the rotation, translation, and scale matrices based on the overlay state
 fn updateTransformsOverlay(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath.Mat, state: *window.WindowState) void {
     // Position
     var newTranslation = translation.*;

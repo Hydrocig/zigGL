@@ -9,6 +9,7 @@ extern "C" {
 
     struct GLFWwindow;
     struct ImVec2;
+    struct ImVec4;
     struct ImGuiInputTextCallbackData;
 
     typedef int ImGuiTreeNodeFlags;
@@ -45,8 +46,8 @@ extern "C" {
     bool InputText(const char* label, char* buf, size_t buf_size, ImGuiInputTextFlags flags, ImGuiInputTextCallback callback, void* user_data);
     void BulletText(const char* fmt, ...);
     void Text(const char* fmt, ...);
+    void TextColoredRGBA(float r, float g, float b, float a, const char* fmt, ...);
     bool DragFloat(const char* label, float* v, float v_speed, float v_min, float v_max, const char* format, ImGuiSliderFlags flags);
-
 
     // Callbacks
     void ImGui_MouseButtonCallback(struct GLFWwindow* window, int button, int action, int mods);
