@@ -12,6 +12,7 @@ const zstbi = @import("zstbi");
 const validator = @import("../util/validator.zig");
 
 var endOfMtl: bool = false; // Flag to stop parsing .mtl file
+var objDir: []const u8 = undefined; // Directory of the relevant files
 
 /// Vertex struct
 ///
@@ -142,7 +143,7 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
 /// Get the path to the .mtl file from the .obj file
 pub fn getMtlFilePath(allocator: std.mem.Allocator, objPath: []const u8) ![]const u8 {
     // Get the directory of the obj file.
-    const objDir = std.fs.path.dirname(objPath) orelse ".";
+    objDir = std.fs.path.dirname(objPath) orelse ".";
 
     // Extract the filename from the objPath.
     // TODO: Use filename from .obj file
@@ -255,14 +256,15 @@ fn handleSpecular(content: []const u8, obj: *ObjectStruct) !void {
 fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
     obj.material.texturePath = content;
 
-    if (obj.material.texturePath.?.len != undefined) {
-        // Convert to null-terminated string
-        const texture_path_z = try obj.allocator.dupeZ(u8, content);
+    // Build the final path
+    var parts = [_][]const u8{objDir, "/", content};
+    const filePath = try std.mem.concat(obj.allocator, u8, &parts);
 
-        // Load the texture from the file with given path and 4 channels (RGBA)
-        obj.material.texture = try zstbi.Image.loadFromFile(texture_path_z, 4);
-        std.log.info("Texture loaded successfully!", .{});
-    }
+    // Convert to null-terminated string
+    const texture_path_z = try obj.allocator.dupeZ(u8, filePath);
+
+    // Load the texture from the file with given path and 4 channels (RGBA)
+    obj.material.texture = try zstbi.Image.loadFromFile(texture_path_z, 4);
 }
 
 /// Add the object name to the object struct
@@ -317,6 +319,7 @@ fn handleNormal(content: []const u8, obj: *ObjectStruct) !void {
     try obj.normals.append(normals);
 }
 
+/// Get 3 coordinates from a string
 fn get3CoordsFromString(content: []const u8) ![3]f32 {
     var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
 
@@ -337,6 +340,7 @@ fn get3CoordsFromString(content: []const u8) ![3]f32 {
     };
 }
 
+/// Get the 2 coordinates from a string
 fn get2CoordsFromString(content: []const u8) ![2]f32 {
     var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
 

@@ -25,7 +25,7 @@ pub fn main() !void {
 
     // Zstbi initialization
     zstbi.init(allocator);
-    defer zstbi.deinit();
+    //defer zstbi.deinit();
 
     // GLFW initialization
     if (!glfw.init(.{})) {
