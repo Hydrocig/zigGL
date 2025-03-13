@@ -23,3 +23,11 @@ pub fn cleanPath(path: []const u8) result.Result([]const u8) {
 
     return result.Result([]const u8).success(trimmed2);
 }
+
+/// Checks if a file exists
+pub fn fileExists(path: []const u8) bool {
+    std.fs.cwd().access(path, .{}) catch {
+        return false;
+    };
+    return true;
+}

@@ -2,10 +2,14 @@
 //!
 //! Loads, parses, and processes .obj files
 
-const std = @import("std");
 const fs = std.fs;
 const io = std.io;
 const mem = std.mem;
+
+const std = @import("std");
+const validator = @import("../util/validator.zig");
+
+var endOfMtl: bool = false; // Flag to stop parsing .mtl file
 
 /// Vertex struct
 ///
@@ -32,6 +36,7 @@ pub const ObjectStruct = struct {
     ebo: std.ArrayList(Face),
     name: std.ArrayList(u8),
     allocator: std.mem.Allocator,
+    material: Material,
 
     /// Deinitialize the object (vbo, ebo, name)
     pub fn deinit(self: *ObjectStruct) void {
@@ -39,6 +44,22 @@ pub const ObjectStruct = struct {
         self.ebo.deinit();
         self.name.deinit();
     }
+};
+
+/// Material struct
+///
+/// Contains:
+/// - name: name of the material
+/// - ambient: ambient color
+/// - diffuse: diffuse color
+/// - specular: specular color
+/// - texturePath: path to the texture
+pub const Material = struct {
+    name: []const u8,           // o
+    ambient: [3]f32,            // Ka
+    diffuse: [3]f32,            // Kd
+    specular: [3]f32,           // Ks
+    texturePath: ?[]const u8,   // map_Kd
 };
 
 /// Load the .obj file
@@ -49,6 +70,13 @@ pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
         .ebo = std.ArrayList(Face).init(allocator),
         .name = std.ArrayList(u8).init(allocator),
         .allocator = allocator,
+        .material = .{
+            .name = undefined,
+            .ambient = undefined,
+            .diffuse = undefined,
+            .specular = undefined,
+            .texturePath = undefined,
+        }
     };
 
     try parseObjFile(objPath, &object);
@@ -78,6 +106,11 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
     // Get mtl file path from obj file location
     const mtlPath = try getMtlFilePath(object.allocator, path);
 
+    if (!validator.fileExists(mtlPath)){
+        // TODO: return error
+        return;
+    }
+
     // Open the file
     const file = try fs.cwd().openFile(mtlPath, .{});
     defer file.close();
@@ -89,6 +122,7 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
     var line_buf: [1024]u8 = undefined;
 
     while (try in_stream.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+        if (endOfMtl) return;
         try processMtlLine(line, object);
     }
 }
@@ -126,15 +160,17 @@ pub fn getMtlFilePath(allocator: std.mem.Allocator, objPath: []const u8) ![]cons
 fn processObjLine(line: []const u8, obj: *ObjectStruct) !void {
     if (line.len == 0) return;
 
-    const prefix = line[0..2]; // Find the prefix (type) of the line
-    const content = if (line.len > 1) line[2..] else ""; // Get the content of the line
+    // Parse line prefix
+    const space_index = mem.indexOfScalar(u8, line, ' ') orelse line.len;
+    const prefix = line[0..space_index];
+    const content = if (space_index < line.len) line[space_index + 1..] else "";
 
     // Currently supported prefixes:
-    if (mem.eql(u8, prefix, "o ")) {            // Object name
+    if (mem.eql(u8, prefix, "o")) {            // Object name
         try handleObjectName(content, obj);
-    } else if (mem.eql(u8, prefix, "v ")) {     // Vertex
+    } else if (mem.eql(u8, prefix, "v")) {     // Vertex
         try handleVertex(content, obj);
-    } else if (mem.eql(u8, prefix, "f ")) {     // Face
+    } else if (mem.eql(u8, prefix, "f")) {     // Face
         try handleFace(content, obj);
     }
 }
@@ -143,17 +179,94 @@ fn processObjLine(line: []const u8, obj: *ObjectStruct) !void {
 fn processMtlLine(line: []const u8, obj: *ObjectStruct) !void {
     if (line.len == 0) return;
 
-    const prefix = line[0..2]; // Find the prefix (type) of the line
-    const content = if (line.len > 1) line[2..] else ""; // Get the content of the line
+    // Parse line prefix
+    const space_index = mem.indexOfScalar(u8, line, ' ') orelse line.len;
+    const prefix = line[0..space_index];
+    const content = if (space_index < line.len) line[space_index + 1..] else "";
 
     // Currently supported prefixes:
-    if (mem.eql(u8, prefix, "o ")) {            // Object name
-        try handleObjectName(content, obj);
-    } else if (mem.eql(u8, prefix, "v ")) {     // Vertex
-        try handleVertex(content, obj);
-    } else if (mem.eql(u8, prefix, "f ")) {     // Face
-        try handleFace(content, obj);
+    if (mem.eql(u8, prefix, "newmtl")) {        // Name
+        try handleName(content, obj);
+    }else if (mem.eql(u8, prefix, "Ka")) {      // Ambient
+        try handleAmbient(content, obj);
+    } else if (mem.eql(u8, prefix, "Kd")) {     // Diffuse
+        try handleDiffuse(content, obj);
+    } else if (mem.eql(u8, prefix, "Ks")) {     // Specular
+        try handleSpecular(content, obj);
+    } else if (mem.eql(u8, prefix, "map_Kd")) { // TexturePath
+        try handleTexturePath(content, obj);
+        endOfMtl = true;
     }
+}
+
+/// Handle the name of the material
+fn handleName(content: []const u8, obj: *ObjectStruct) !void {
+    obj.material.name = content;
+}
+
+/// Handle the ambient color of the material
+fn handleAmbient(content: []const u8, obj: *ObjectStruct) !void {
+    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
+
+    // Parse the components into the vertex struct components
+    const x_str = components.next() orelse return error.InvalidVertex;
+    const y_str = components.next() orelse return error.InvalidVertex;
+    const z_str = components.next() orelse return error.InvalidVertex;
+
+    // Trim any potential whitespace from the strings before parsing
+    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
+    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
+    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+
+    // Add the parsed components to the material struct
+    obj.material.ambient[0] = try std.fmt.parseFloat(f32, x_trimmed);
+    obj.material.ambient[1] = try std.fmt.parseFloat(f32, y_trimmed);
+    obj.material.ambient[2] = try std.fmt.parseFloat(f32, z_trimmed);
+}
+
+/// Handle the diffuse color of the material
+fn handleDiffuse(content: []const u8, obj: *ObjectStruct) !void {
+    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
+
+    // Parse the components into the vertex struct components
+    const x_str = components.next() orelse return error.InvalidVertex;
+    const y_str = components.next() orelse return error.InvalidVertex;
+    const z_str = components.next() orelse return error.InvalidVertex;
+
+    // Trim any potential whitespace from the strings before parsing
+    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
+    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
+    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+
+    // Add the parsed components to the material struct
+    obj.material.diffuse[0] = try std.fmt.parseFloat(f32, x_trimmed);
+    obj.material.diffuse[1] = try std.fmt.parseFloat(f32, y_trimmed);
+    obj.material.diffuse[2] = try std.fmt.parseFloat(f32, z_trimmed);
+}
+
+/// Handle the specular color of the material
+fn handleSpecular(content: []const u8, obj: *ObjectStruct) !void {
+    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
+
+    // Parse the components into the vertex struct components
+    const x_str = components.next() orelse return error.InvalidVertex;
+    const y_str = components.next() orelse return error.InvalidVertex;
+    const z_str = components.next() orelse return error.InvalidVertex;
+
+    // Trim any potential whitespace from the strings before parsing
+    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
+    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
+    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+
+    // Add the parsed components to the material struct
+    obj.material.specular[0] = try std.fmt.parseFloat(f32, x_trimmed);
+    obj.material.specular[1] = try std.fmt.parseFloat(f32, y_trimmed);
+    obj.material.specular[2] = try std.fmt.parseFloat(f32, z_trimmed);
+}
+
+/// Handle the texture path of the material
+fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
+    obj.material.texturePath = content;
 }
 
 /// Add the object name to the object struct
