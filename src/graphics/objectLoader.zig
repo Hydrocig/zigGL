@@ -44,19 +44,20 @@ pub const ObjectStruct = struct {
 /// Load the .obj file
 pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
     // Initialize the object struct
-    var obj = ObjectStruct{
+    var object = ObjectStruct{
         .vbo = std.ArrayList(Vertex).init(allocator),
         .ebo = std.ArrayList(Face).init(allocator),
         .name = std.ArrayList(u8).init(allocator),
         .allocator = allocator,
     };
 
-    try parseObjFile(objPath, &obj);
-    return obj;
+    try parseObjFile(objPath, &object);
+    try parseMtlFile(objPath, &object);
+    return object;
 }
 
 /// Parse the .obj file
-fn parseObjFile(path: []const u8, obj: *ObjectStruct) !void {
+fn parseObjFile(path: []const u8, object: *ObjectStruct) !void {
     // Open the file
     const file = try fs.cwd().openFile(path, .{});
     defer file.close();
@@ -68,12 +69,78 @@ fn parseObjFile(path: []const u8, obj: *ObjectStruct) !void {
     var line_buf: [1024]u8 = undefined;
 
     while (try in_stream.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
-        try processLine(line, obj);
+        try processObjLine(line, object);
     }
 }
 
+/// Parse the .mtl file
+fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
+    // Get mtl file path from obj file location
+    const mtlPath = try getMtlFilePath(object.allocator, path);
+
+    // Open the file
+    const file = try fs.cwd().openFile(mtlPath, .{});
+    defer file.close();
+
+    // Read the file line by line
+    var buf_reader = io.bufferedReader(file.reader());
+    var in_stream = buf_reader.reader();
+
+    var line_buf: [1024]u8 = undefined;
+
+    while (try in_stream.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
+        try processMtlLine(line, object);
+    }
+}
+
+/// Get the path to the .mtl file from the .obj file
+pub fn getMtlFilePath(allocator: std.mem.Allocator, objPath: []const u8) ![]const u8 {
+    // Get the directory of the obj file.
+    const objDir = std.fs.path.dirname(objPath) orelse ".";
+
+    // Extract the filename from the objPath.
+    var i: usize = objPath.len;
+    var filename_start: usize = 0;
+    while (i > 0) {
+        i -= 1;
+        if (objPath[i] == '/' or objPath[i] == '\\') {
+            filename_start = i + 1;
+            break;
+        }
+    }
+    var filename = objPath[filename_start..];
+
+    // Remove the ".obj" extension if present.
+    if (std.mem.endsWith(u8, filename, ".obj")) {
+        filename = filename[0..filename.len - 4];
+    }
+
+    // Build the final path as: objDir + "/" + filename + ".mtl"
+    var parts = [_][]const u8{objDir, "/", filename, ".mtl"};
+    const finalPath = try std.mem.concat(allocator, u8, &parts);
+
+    return finalPath;
+}
+
 /// Process a single line from the .obj file
-fn processLine(line: []const u8, obj: *ObjectStruct) !void {
+fn processObjLine(line: []const u8, obj: *ObjectStruct) !void {
+    if (line.len == 0) return;
+
+    const prefix = line[0..2]; // Find the prefix (type) of the line
+    const content = if (line.len > 1) line[2..] else ""; // Get the content of the line
+
+    // Currently supported prefixes:
+    if (mem.eql(u8, prefix, "o ")) {            // Object name
+        try handleObjectName(content, obj);
+    } else if (mem.eql(u8, prefix, "v ")) {     // Vertex
+        try handleVertex(content, obj);
+    } else if (mem.eql(u8, prefix, "f ")) {     // Face
+        try handleFace(content, obj);
+    }
+}
+
+/// Process a single line from the .mtl file
+fn processMtlLine(line: []const u8, obj: *ObjectStruct) !void {
     if (line.len == 0) return;
 
     const prefix = line[0..2]; // Find the prefix (type) of the line
