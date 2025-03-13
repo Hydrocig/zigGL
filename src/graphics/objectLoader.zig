@@ -30,13 +30,17 @@ pub const Face = struct { face: [3]usize };
 /// Contains:
 /// - vbo: vertex buffer object
 /// - ebo: element buffer object
+/// - normals: normals of the object
+/// - texCoords: texture coordinates of the object
 /// - name: name of the object
 /// - allocator: memory allocator
 /// deinit method
 pub const ObjectStruct = struct {
-    vbo: std.ArrayList(Vertex),
-    ebo: std.ArrayList(Face),
-    name: std.ArrayList(u8),
+    vbo: std.ArrayList(Vertex),         // v
+    ebo: std.ArrayList(Face),           // f
+    normals: std.ArrayList([3]f32),     // vn
+    texCoords: std.ArrayList([2]f32),   // vt
+    name: std.ArrayList(u8),            // o
     allocator: std.mem.Allocator,
     material: Material,
 
@@ -44,6 +48,8 @@ pub const ObjectStruct = struct {
     pub fn deinit(self: *ObjectStruct) void {
         self.vbo.deinit();
         self.ebo.deinit();
+        self.normals.deinit();
+        self.texCoords.deinit();
         self.name.deinit();
     }
 };
@@ -72,6 +78,8 @@ pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
     var object = ObjectStruct{
         .vbo = std.ArrayList(Vertex).init(allocator),
         .ebo = std.ArrayList(Face).init(allocator),
+        .normals = std.ArrayList([3]f32).init(allocator),
+        .texCoords = std.ArrayList([2]f32).init(allocator),
         .name = std.ArrayList(u8).init(allocator),
         .allocator = allocator,
         .material = .{
@@ -137,6 +145,7 @@ pub fn getMtlFilePath(allocator: std.mem.Allocator, objPath: []const u8) ![]cons
     const objDir = std.fs.path.dirname(objPath) orelse ".";
 
     // Extract the filename from the objPath.
+    // TODO: Use filename from .obj file
     var i: usize = objPath.len;
     var filename_start: usize = 0;
     while (i > 0) {
@@ -170,12 +179,16 @@ fn processObjLine(line: []const u8, obj: *ObjectStruct) !void {
     const content = if (space_index < line.len) line[space_index + 1..] else "";
 
     // Currently supported prefixes:
-    if (mem.eql(u8, prefix, "o")) {            // Object name
+    if (mem.eql(u8, prefix, "o")) {             // Object name
         try handleObjectName(content, obj);
-    } else if (mem.eql(u8, prefix, "v")) {     // Vertex
+    } else if (mem.eql(u8, prefix, "v")) {      // Vertex
         try handleVertex(content, obj);
-    } else if (mem.eql(u8, prefix, "f")) {     // Face
+    } else if (mem.eql(u8, prefix, "f")) {      // Face
         try handleFace(content, obj);
+    } else if (mem.eql(u8, prefix, "vt")) {     // Texture coordinate
+        try handleTextureCoordinate(content, obj);
+    } else if (mem.eql(u8, prefix, "vn")) {     // Normal
+        try handleNormal(content, obj);
     }
 }
 
@@ -210,62 +223,32 @@ fn handleName(content: []const u8, obj: *ObjectStruct) !void {
 
 /// Handle the ambient color of the material
 fn handleAmbient(content: []const u8, obj: *ObjectStruct) !void {
-    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
-
-    // Parse the components into the vertex struct components
-    const x_str = components.next() orelse return error.InvalidVertex;
-    const y_str = components.next() orelse return error.InvalidVertex;
-    const z_str = components.next() orelse return error.InvalidVertex;
-
-    // Trim any potential whitespace from the strings before parsing
-    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
-    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
-    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+    const ambient = try get3CoordsFromString(content);
 
     // Add the parsed components to the material struct
-    obj.material.ambient[0] = try std.fmt.parseFloat(f32, x_trimmed);
-    obj.material.ambient[1] = try std.fmt.parseFloat(f32, y_trimmed);
-    obj.material.ambient[2] = try std.fmt.parseFloat(f32, z_trimmed);
+    obj.material.ambient[0] = ambient[0];
+    obj.material.ambient[1] = ambient[1];
+    obj.material.ambient[2] = ambient[2];
 }
 
 /// Handle the diffuse color of the material
 fn handleDiffuse(content: []const u8, obj: *ObjectStruct) !void {
-    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
-
-    // Parse the components into the vertex struct components
-    const x_str = components.next() orelse return error.InvalidVertex;
-    const y_str = components.next() orelse return error.InvalidVertex;
-    const z_str = components.next() orelse return error.InvalidVertex;
-
-    // Trim any potential whitespace from the strings before parsing
-    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
-    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
-    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+    const diffuse = try get3CoordsFromString(content);
 
     // Add the parsed components to the material struct
-    obj.material.diffuse[0] = try std.fmt.parseFloat(f32, x_trimmed);
-    obj.material.diffuse[1] = try std.fmt.parseFloat(f32, y_trimmed);
-    obj.material.diffuse[2] = try std.fmt.parseFloat(f32, z_trimmed);
+    obj.material.diffuse[0] = diffuse[0];
+    obj.material.diffuse[1] = diffuse[1];
+    obj.material.diffuse[2] = diffuse[2];
 }
 
 /// Handle the specular color of the material
 fn handleSpecular(content: []const u8, obj: *ObjectStruct) !void {
-    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
-
-    // Parse the components into the vertex struct components
-    const x_str = components.next() orelse return error.InvalidVertex;
-    const y_str = components.next() orelse return error.InvalidVertex;
-    const z_str = components.next() orelse return error.InvalidVertex;
-
-    // Trim any potential whitespace from the strings before parsing
-    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
-    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
-    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+    const specular = try get3CoordsFromString(content);
 
     // Add the parsed components to the material struct
-    obj.material.specular[0] = try std.fmt.parseFloat(f32, x_trimmed);
-    obj.material.specular[1] = try std.fmt.parseFloat(f32, y_trimmed);
-    obj.material.specular[2] = try std.fmt.parseFloat(f32, z_trimmed);
+    obj.material.specular[0] = specular[0];
+    obj.material.specular[1] = specular[1];
+    obj.material.specular[2] = specular[2];
 }
 
 /// Handle the texture path of the material
@@ -290,23 +273,12 @@ fn handleObjectName(content: []const u8, obj: *ObjectStruct) !void {
 
 /// Add a vertex to the object struct
 fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
-    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
+    const vertices = try get3CoordsFromString(content);
 
-    // Parse the components into the vertex struct components (x, y, z)
-    const x_str = components.next() orelse return error.InvalidVertex;
-    const y_str = components.next() orelse return error.InvalidVertex;
-    const z_str = components.next() orelse return error.InvalidVertex;
-
-    // Trim any potential whitespace from the strings before parsing
-    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
-    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
-    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
-
-    // Add the parsed components to the vertex struct
     const vertex = Vertex{ .position = .{
-        try std.fmt.parseFloat(f32, x_trimmed),
-        try std.fmt.parseFloat(f32, y_trimmed),
-        try std.fmt.parseFloat(f32, z_trimmed),
+        vertices[0],
+        vertices[1],
+        vertices[2],
     } };
 
     try obj.vbo.append(vertex);
@@ -329,4 +301,55 @@ fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
     }
 
     try obj.ebo.append(Face{ .face = indices });
+}
+
+/// Handle the texture coordinate of the face
+fn handleTextureCoordinate(content: []const u8, obj: *ObjectStruct) !void {
+    const texCoords = try get2CoordsFromString(content);
+
+    try obj.texCoords.append(texCoords);
+}
+
+/// Handle the normal of the face
+fn handleNormal(content: []const u8, obj: *ObjectStruct) !void {
+    const normals = try get3CoordsFromString(content);
+
+    try obj.normals.append(normals);
+}
+
+fn get3CoordsFromString(content: []const u8) ![3]f32 {
+    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
+
+    // Parse the components into the vertex struct components
+    const x_str = components.next() orelse return error.InvalidVertex;
+    const y_str = components.next() orelse return error.InvalidVertex;
+    const z_str = components.next() orelse return error.InvalidVertex;
+
+    // Trim any potential whitespace from the strings before parsing
+    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
+    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
+    const z_trimmed = mem.trim(u8, z_str, &std.ascii.whitespace);
+
+    return .{
+        try std.fmt.parseFloat(f32, x_trimmed),
+        try std.fmt.parseFloat(f32, y_trimmed),
+        try std.fmt.parseFloat(f32, z_trimmed),
+    };
+}
+
+fn get2CoordsFromString(content: []const u8) ![2]f32 {
+    var components = mem.tokenize(u8, content, " \t\r"); // Tokenize to skip multiple delimiters
+
+    // Parse the components into the vertex struct components
+    const x_str = components.next() orelse return error.InvalidVertex;
+    const y_str = components.next() orelse return error.InvalidVertex;
+
+    // Trim any potential whitespace from the strings before parsing
+    const x_trimmed = mem.trim(u8, x_str, &std.ascii.whitespace);
+    const y_trimmed = mem.trim(u8, y_str, &std.ascii.whitespace);
+
+    return .{
+        try std.fmt.parseFloat(f32, x_trimmed),
+        try std.fmt.parseFloat(f32, y_trimmed),
+    };
 }
