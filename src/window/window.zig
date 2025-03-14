@@ -7,9 +7,10 @@
 const std = @import("std");
 const glfw = @import("mach-glfw");
 const zmath = @import("zmath");
-const overlay = @import("../ui/overlay.zig");
 const gl = @import("gl");
+const zstbi = @import("zstbi");
 
+const overlay = @import("../ui/overlay.zig");
 const c = @cImport({
     @cInclude("cimgui.h");
 });
@@ -88,6 +89,26 @@ pub fn init(title: [*:0]const u8) !glfw.Window {
         .opengl_profile = .opengl_core_profile,  // OpenGL profile
         .opengl_forward_compat = true,                   // OpenGL forward compatibility
     }) orelse return error.WindowCreateFailed;
+
+    // Window icon
+    zstbi.setFlipVerticallyOnLoad(false);
+    var icon_image = try zstbi.Image.loadFromFile("objects/icon.png", 4);
+    zstbi.setFlipVerticallyOnLoad(true);
+    defer icon_image.deinit();
+
+    // GLFW-compatible image
+    const glfw_icon = glfw.Image{
+        .width = icon_image.width,
+        .height = icon_image.height,
+        .pixels = icon_image.data,
+        .owned = true,
+    };
+
+    // Allocator
+    const allocator = std.heap.page_allocator;
+
+    // Set window icon
+    try window.setIcon(allocator, (&glfw_icon)[0..1]);
 
     glfw.makeContextCurrent(window);
 
