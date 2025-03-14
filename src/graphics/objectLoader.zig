@@ -41,6 +41,7 @@ pub const Face = struct {
 /// - normals: normals of the object
 /// - texCoords: texture coordinates of the object
 /// - name: name of the object
+/// - mtllib: name of the material file
 /// - allocator: memory allocator
 /// - materials: list of materials
 /// - currentMaterialName: name of the current material
@@ -51,6 +52,7 @@ pub const ObjectStruct = struct {
     normals: std.ArrayList([3]f32),     // vn
     texCoords: std.ArrayList([2]f32),   // vt
     name: std.ArrayList(u8),            // o
+    mtllib: []const u8,                 // mtllib
     allocator: std.mem.Allocator,                   // Memory allocator
     materials: std.ArrayList(Material),             // List of materials
     faceMaterialIndices: std.ArrayList(usize),      // Material index per face
@@ -107,6 +109,7 @@ pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
         .normals = std.ArrayList([3]f32).init(allocator),
         .texCoords = std.ArrayList([2]f32).init(allocator),
         .name = std.ArrayList(u8).init(allocator),
+        .mtllib = "",
         .allocator = allocator,
         .materials = std.ArrayList(Material).init(allocator),
         .faceMaterialIndices = std.ArrayList(usize).init(allocator),
@@ -114,7 +117,12 @@ pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
     };
 
     try parseObjFile(objPath, &object);
-    try parseMtlFile(objPath, &object);
+
+    // Dont parse .mtl file if not present
+    if(object.mtllib.len > 0) {
+        try parseMtlFile(objPath, &object);
+    }
+
     return object;
 }
 
@@ -138,7 +146,7 @@ fn parseObjFile(path: []const u8, object: *ObjectStruct) !void {
 /// Parse the .mtl file
 fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
     // Get mtl file path from obj file location
-    const mtlPath = try getMtlFilePath(object.allocator, path);
+    const mtlPath = try getMtlFilePath(object, path);
 
     if (!validator.fileExists(mtlPath)){
         // TODO: return error
@@ -162,35 +170,16 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
 }
 
 /// Get the path to the .mtl file from the .obj file
-pub fn getMtlFilePath(allocator: std.mem.Allocator, objPath: []const u8) ![]const u8 {
+pub fn getMtlFilePath(object: *ObjectStruct, objPath: []const u8) ![]const u8 {
     // Get the directory of the obj file.
     objDir = std.fs.path.dirname(objPath) orelse ".";
 
     // Extract the filename from the objPath.
-    // TODO: Use filename from .obj file
-    var i: usize = objPath.len;
-    var filename_start: usize = 0;
-    while (i > 0) {
-        i -= 1;
-        if (objPath[i] == '/' or objPath[i] == '\\') {
-            filename_start = i + 1;
-            break;
-        }
-    }
-    var filename = objPath[filename_start..];
-    filename = std.mem.trim(u8, filename, " \t\r\n"); // Trim whitespace
-    if (std.mem.endsWith(u8, filename, ".obj")) {
-        filename = filename[0..filename.len - 4];
-    }
+    const mtlFilename = object.mtllib;
 
-    // Remove the ".obj" extension if present.
-    if (std.mem.endsWith(u8, filename, ".obj")) {
-        filename = filename[0..filename.len - 4];
-    }
-
-    // Build the final path as: objDir + "/" + filename + ".mtl"
-    var parts = [_][]const u8{objDir, "/", filename, ".mtl"};
-    const finalPath = try std.mem.concat(allocator, u8, &parts);
+    // Build the final path as: objDir + "/" + mtlFilename
+    var parts = [_][]const u8{objDir, "/", mtlFilename};
+    const finalPath = try std.mem.concat(object.allocator, u8, &parts);
 
     return finalPath;
 }
@@ -205,17 +194,19 @@ fn processObjLine(line: []const u8, obj: *ObjectStruct) !void {
     const content = if (space_index < line.len) line[space_index + 1..] else "";
 
     // Currently supported prefixes:
-    if (mem.eql(u8, prefix, "usemtl")) {        // Material for subsequent faces
+    if (mem.eql(u8, prefix, "usemtl")) {            // Material for subsequent faces
     obj.currentMaterialName = content;
-    } else if (mem.eql(u8, prefix, "o")) {      // Object name
+    } else if (mem.eql(u8, prefix, "o")) {          // Object name
         try handleObjectName(content, obj);
-    } else if (mem.eql(u8, prefix, "v")) {      // Vertex
+    } else if (mem.eql(u8, prefix, "mtllib")) {     // Mtl file name
+        try handleMtlFileName(content, obj);
+    } else if (mem.eql(u8, prefix, "v")) {          // Vertex
         try handleVertex(content, obj);
-    } else if (mem.eql(u8, prefix, "f")) {      // Face
+    } else if (mem.eql(u8, prefix, "f")) {          // Face
         try handleFace(content, obj);
-    } else if (mem.eql(u8, prefix, "vt")) {     // Texture coordinate
+    } else if (mem.eql(u8, prefix, "vt")) {         // Texture coordinate
         try handleTextureCoordinate(content, obj);
-    } else if (mem.eql(u8, prefix, "vn")) {     // Normal
+    } else if (mem.eql(u8, prefix, "vn")) {         // Normal
         try handleNormal(content, obj);
     }
 }
@@ -346,6 +337,11 @@ fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
 fn handleObjectName(content: []const u8, obj: *ObjectStruct) !void {
     obj.name.clearRetainingCapacity(); // Clear the name
     try obj.name.appendSlice(content); // Append the new name
+}
+
+/// Add the material file name to the object struct
+fn handleMtlFileName(content: []const u8, obj: *ObjectStruct) !void {
+    obj.mtllib = try obj.allocator.dupe(u8, content);
 }
 
 /// Add a vertex to the object struct

@@ -20,7 +20,7 @@ const c = @cImport({
 ///
 /// Contains:
 /// - position, rotation, scale (transformations)
-/// - objPath, mtlPath (file paths)
+/// - objPath (file path)
 /// - manualEdit (flag for manual transformation editing)
 /// - visible (flag for overlay visibility)
 /// - errorMessage
@@ -32,7 +32,6 @@ pub const OverlayState = struct {
 
     // File paths
     objPath: [256]u8 = [_]u8{0} ** 256,
-    mtlPath: [256]u8 = [_]u8{0} ** 256,
 
     // State flags
     manualEdit: bool = false,
@@ -100,14 +99,9 @@ fn filePanel(state: *OverlayState) !void {
     c.SameLine(0, 18);
     _ = c.InputTextWithHint("##obj", "Path to .obj file", &state.objPath, state.objPath.len, 0, null, null);
 
-    // MTL file path
-    c.Text("MTL");
-    c.SameLine(0, 18);
-    _ = c.InputTextWithHint("##mtl", "Path to .mtl file", &state.mtlPath, state.mtlPath.len, 0, null, null);
-
     // Load button
     if (c.Button("Load")) {
-        try loadNewObject(&state.objPath, &state.mtlPath, state);
+        try loadNewObject(&state.objPath, state);
     }
     c.SameLine(10, 35);
     c.TextColoredRGBA(1, 0, 0, 1, state.getErrorMessagePtr()); // Red RGBA
@@ -115,9 +109,7 @@ fn filePanel(state: *OverlayState) !void {
 }
 
 /// Loads new object from .obj and .mtl paths
-fn loadNewObject(objPath: []const u8, mtlPath: []const u8, state: *OverlayState) !void{
-    _ = mtlPath;
-
+fn loadNewObject(objPath: []const u8, state: *OverlayState) !void{
     // Clean and validate obj path
     const cleanObjPath = try validator.cleanPath(allocator, objPath);
     if (!cleanObjPath.isValid()) {

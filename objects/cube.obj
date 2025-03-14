@@ -1,6 +1,5 @@
 # Blender 4.3.2
 # www.blender.org
-mtllib untitled.mtl
 o Cube
 v -0.500000 -0.500000 0.500000
 v -0.500000 0.500000 0.500000
