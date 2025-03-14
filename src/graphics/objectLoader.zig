@@ -10,6 +10,9 @@ const std = @import("std");
 const gl = @import("gl");
 const zstbi = @import("zstbi");
 
+const overlay = @import("../ui/overlay.zig");
+const errors = @import("../util/errors.zig");
+const result = @import("../util/result.zig");
 const validator = @import("../util/validator.zig");
 
 var endOfMtl: bool = false; // Flag to stop parsing .mtl file
@@ -47,16 +50,16 @@ pub const Face = struct {
 /// - currentMaterialName: name of the current material
 /// deinit method
 pub const ObjectStruct = struct {
-    vbo: std.ArrayList(Vertex),         // v
-    ebo: std.ArrayList(Face),           // f
-    normals: std.ArrayList([3]f32),     // vn
-    texCoords: std.ArrayList([2]f32),   // vt
-    name: std.ArrayList(u8),            // o
-    mtllib: []const u8,                 // mtllib
-    allocator: std.mem.Allocator,                   // Memory allocator
-    materials: std.ArrayList(Material),             // List of materials
-    faceMaterialIndices: std.ArrayList(usize),      // Material index per face
-    currentMaterialName: ?[]const u8,               // Current material name
+    vbo: std.ArrayList(Vertex), // v
+    ebo: std.ArrayList(Face), // f
+    normals: std.ArrayList([3]f32), // vn
+    texCoords: std.ArrayList([2]f32), // vt
+    name: std.ArrayList(u8), // o
+    mtllib: []const u8, // mtllib
+    allocator: std.mem.Allocator, // Memory allocator
+    materials: std.ArrayList(Material), // List of materials
+    faceMaterialIndices: std.ArrayList(usize), // Material index per face
+    currentMaterialName: ?[]const u8, // Current material name
 
     /// Deinitialize the object (vbo, ebo, name)
     pub fn deinit(self: *ObjectStruct) void {
@@ -80,14 +83,13 @@ pub const ObjectStruct = struct {
 /// - texturePath: path to the texture
 /// - texture: zstbi.Image struct
 pub const Material = struct {
-    name: []const u8,               // o
-    ambient: [3]f32,                // Ka
-    diffuse: [3]f32,                // Kd
-    specular: [3]f32,               // Ks
-    texturePath: ?[]const u8,       // map_Kd
+    name: []const u8, // o
+    ambient: [3]f32, // Ka
+    diffuse: [3]f32, // Kd
+    specular: [3]f32, // Ks
+    texturePath: ?[]const u8, // map_Kd
     texture: ?zstbi.Image = undefined,
     textureId: gl.uint = undefined,
-
 
     pub fn deinit(self: *Material, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
@@ -119,7 +121,7 @@ pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
     try parseObjFile(objPath, &object);
 
     // Dont parse .mtl file if not present
-    if(object.mtllib.len > 0) {
+    if (object.mtllib.len > 0) {
         try parseMtlFile(objPath, &object);
     }
 
@@ -148,8 +150,8 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
     // Get mtl file path from obj file location
     const mtlPath = try getMtlFilePath(object, path);
 
-    if (!validator.fileExists(mtlPath)){
-        // TODO: return error
+    if (!validator.fileExists(mtlPath)) {
+        errors.errorCollector.reportError(errors.ErrorCode.MtlFileNotFound);
         return;
     }
 
@@ -178,7 +180,7 @@ pub fn getMtlFilePath(object: *ObjectStruct, objPath: []const u8) ![]const u8 {
     const mtlFilename = object.mtllib;
 
     // Build the final path as: objDir + "/" + mtlFilename
-    var parts = [_][]const u8{objDir, "/", mtlFilename};
+    var parts = [_][]const u8{ objDir, "/", mtlFilename };
     const finalPath = try std.mem.concat(object.allocator, u8, &parts);
 
     return finalPath;
@@ -191,22 +193,22 @@ fn processObjLine(line: []const u8, obj: *ObjectStruct) !void {
     // Parse line prefix
     const space_index = mem.indexOfScalar(u8, line, ' ') orelse line.len;
     const prefix = line[0..space_index];
-    const content = if (space_index < line.len) line[space_index + 1..] else "";
+    const content = if (space_index < line.len) line[space_index + 1 ..] else "";
 
     // Currently supported prefixes:
-    if (mem.eql(u8, prefix, "usemtl")) {            // Material for subsequent faces
-    obj.currentMaterialName = content;
-    } else if (mem.eql(u8, prefix, "o")) {          // Object name
+    if (mem.eql(u8, prefix, "usemtl")) { // Material for subsequent faces
+        obj.currentMaterialName = content;
+    } else if (mem.eql(u8, prefix, "o")) { // Object name
         try handleObjectName(content, obj);
-    } else if (mem.eql(u8, prefix, "mtllib")) {     // Mtl file name
+    } else if (mem.eql(u8, prefix, "mtllib")) { // Mtl file name
         try handleMtlFileName(content, obj);
-    } else if (mem.eql(u8, prefix, "v")) {          // Vertex
+    } else if (mem.eql(u8, prefix, "v")) { // Vertex
         try handleVertex(content, obj);
-    } else if (mem.eql(u8, prefix, "f")) {          // Face
+    } else if (mem.eql(u8, prefix, "f")) { // Face
         try handleFace(content, obj);
-    } else if (mem.eql(u8, prefix, "vt")) {         // Texture coordinate
+    } else if (mem.eql(u8, prefix, "vt")) { // Texture coordinate
         try handleTextureCoordinate(content, obj);
-    } else if (mem.eql(u8, prefix, "vn")) {         // Normal
+    } else if (mem.eql(u8, prefix, "vn")) { // Normal
         try handleNormal(content, obj);
     }
 }
@@ -218,16 +220,16 @@ fn processMtlLine(line: []const u8, obj: *ObjectStruct) !void {
     // Parse line prefix
     const space_index = mem.indexOfScalar(u8, line, ' ') orelse line.len;
     const prefix = line[0..space_index];
-    const content = if (space_index < line.len) line[space_index + 1..] else "";
+    const content = if (space_index < line.len) line[space_index + 1 ..] else "";
 
     // Currently supported prefixes:
-    if (mem.eql(u8, prefix, "newmtl")) {        // Name
+    if (mem.eql(u8, prefix, "newmtl")) { // Name
         try handleName(content, obj);
-    }else if (mem.eql(u8, prefix, "Ka")) {      // Ambient
+    } else if (mem.eql(u8, prefix, "Ka")) { // Ambient
         try handleAmbient(content, obj);
-    } else if (mem.eql(u8, prefix, "Kd")) {     // Diffuse
+    } else if (mem.eql(u8, prefix, "Kd")) { // Diffuse
         try handleDiffuse(content, obj);
-    } else if (mem.eql(u8, prefix, "Ks")) {     // Specular
+    } else if (mem.eql(u8, prefix, "Ks")) { // Specular
         try handleSpecular(content, obj);
     } else if (mem.eql(u8, prefix, "map_Kd")) { // TexturePath
         try handleTexturePath(content, obj);
@@ -309,7 +311,7 @@ fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
 
     // Upload texture data to GPU
     var format: gl.@"enum" = undefined;
-    if(material.texture.?.num_components == 3) {
+    if (material.texture.?.num_components == 3) {
         format = gl.RGB;
     } else if (material.texture.?.num_components == 4) {
         format = gl.RGBA;
@@ -359,11 +361,10 @@ fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
 
 /// Add a face to the object struct
 fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
-
     var face = Face{
-        .face = undefined,              // Vertex indices
-        .texCoordIndices = undefined,   // Texture coordinate indices
-        .normalIndices = undefined,     // Normal indices
+        .face = undefined, // Vertex indices
+        .texCoordIndices = undefined, // Texture coordinate indices
+        .normalIndices = undefined, // Normal indices
     };
 
     // Trim leading/trailing whitespace and line endings
