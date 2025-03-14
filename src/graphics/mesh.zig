@@ -20,6 +20,7 @@ pub const Mesh = struct {
     vbo: gl.uint,
     ebo: gl.uint,
     index_count: usize,
+    object: *objectLoader.ObjectStruct,
 
     pub fn init() !void {
         try load("objects/cube.obj"); // Load default cube
@@ -32,9 +33,10 @@ pub const Mesh = struct {
         var eboArr: [1]gl.uint = .{self.ebo};
 
         gl.DeleteVertexArrays(1, &vaoArr);
-            gl.DeleteBuffers(1, &vboArr);
-            gl.DeleteBuffers(1, &eboArr);
-        }
+        gl.DeleteBuffers(1, &vboArr);
+        gl.DeleteBuffers(1, &eboArr);
+        self.object.deinit(); // Object struct
+    }
 };
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -44,13 +46,14 @@ pub var loadedObject: Mesh = undefined;
 
 /// Load the mesh from the .obj file using the objectLoader
 pub fn load(path: []const u8) !void {
-    // Load object
-    var obj = try objectLoader.load(path, allocator);
-    defer obj.deinit();
+    // Load object;
+    const obj = try allocator.create(objectLoader.ObjectStruct);
+    obj.* = try objectLoader.load(path, allocator);
 
     // Convert faces to indices
-    const indices = try convertFaces(obj.ebo.items, allocator);
-    defer allocator.free(indices);
+    const interleaved  = try convertFaces(obj, allocator);
+    defer allocator.free(interleaved .indices);
+    defer allocator.free(interleaved .vertices);
 
     // Create vertex array object
     var vao: gl.uint = undefined;
@@ -61,24 +64,33 @@ pub fn load(path: []const u8) !void {
     var vbo: gl.uint = undefined;
     gl.GenBuffers(1, (&vbo)[0..1]); // Generate the buffer
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo); // Bind the buffer
-    gl.BufferData(gl.ARRAY_BUFFER, @intCast(obj.vbo.items.len * @sizeOf(objectLoader.Vertex)), obj.vbo.items.ptr, gl.STATIC_DRAW); // Fill the buffer with data
+    gl.BufferData(gl.ARRAY_BUFFER, @intCast(interleaved.vertices.len * @sizeOf(f32)), interleaved.vertices.ptr, gl.STATIC_DRAW); // Fill the buffer with data
 
     // Create element buffer object
     var ebo: gl.uint = undefined;
     gl.GenBuffers(1, (&ebo)[0..1]); // Generate the buffer
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo); // Bind the buffer
-    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(indices.len * @sizeOf(u32)), indices.ptr, gl.STATIC_DRAW); // Fill the buffer with data
+    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(interleaved.indices.len * @sizeOf(u32)), interleaved.indices.ptr, gl.STATIC_DRAW); // Fill the buffer with data
 
-    // Set vertex attributes
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, @sizeOf(f32) * 3, 0);
-    gl.EnableVertexAttribArray(0); // Enables the vertex attribute (inside the vertex shader)
+    // Position (location = 0)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), 0);                  // Position
+    gl.EnableVertexAttribArray(0);
+
+    // UVs (location = 1)
+    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), 3 * @sizeOf(f32));   // UVs
+    gl.EnableVertexAttribArray(1);
+
+    // Normals (location = 2)
+    gl.VertexAttribPointer(2, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), 5 * @sizeOf(f32));   // Normals
+    gl.EnableVertexAttribArray(2);
 
     // Set the currently loaded object
     loadedObject = Mesh{
         .vao = vao,
         .vbo = vbo,
         .ebo = ebo,
-        .index_count = indices.len,
+        .index_count = interleaved.indices.len,
+        .object = obj,
     };
 }
 
@@ -87,13 +99,37 @@ pub fn deinit() void {
     Mesh.deinit(loadedObject);
 }
 
-/// Convert faces to indices
-fn convertFaces(faces: []const objectLoader.Face, faceAllocator: std.mem.Allocator) ![]u32 {
-    const indices = try faceAllocator.alloc(u32, faces.len * 3);
-    for (faces, 0..) |face, i| {
-        indices[i*3] = @intCast(face.face[0]);
-        indices[i*3+1] = @intCast(face.face[1]);
-        indices[i*3+2] = @intCast(face.face[2]);
+/// Convert faces to indices and generate interleaved vertex data
+fn convertFaces(obj: *objectLoader.ObjectStruct, faceAllocator: std.mem.Allocator) !struct { vertices: []f32, indices: []u32 } {
+    const face_count = obj.ebo.items.len;
+    const vert_count = face_count * 3; // 3 vertices per face
+    const vertices = try faceAllocator.alloc(f32, vert_count * 8); // 3 positions + 2 UVs + 3 normals = 8 floats per vertex
+    const indices = try faceAllocator.alloc(u32, vert_count);
+
+    // Iterate over faces and fill the vertices and indices arrays
+    for (obj.ebo.items, 0..) |face, i| {
+        for (0..3) |j| {
+            const v_idx = face.face[j];
+            const vt_idx = face.texCoordIndices[j];
+            const vn_idx = face.normalIndices[j];
+
+            // Positions
+            vertices[i*24 + j*8 + 0] = obj.vbo.items[v_idx].position[0];
+            vertices[i*24 + j*8 + 1] = obj.vbo.items[v_idx].position[1];
+            vertices[i*24 + j*8 + 2] = obj.vbo.items[v_idx].position[2];
+
+            // UVs
+            vertices[i*24 + j*8 + 3] = obj.texCoords.items[vt_idx][0];
+            vertices[i*24 + j*8 + 4] = obj.texCoords.items[vt_idx][1];
+
+            // Normals
+            vertices[i*24 + j*8 + 5] = obj.normals.items[vn_idx][0];
+            vertices[i*24 + j*8 + 6] = obj.normals.items[vn_idx][1];
+            vertices[i*24 + j*8 + 7] = obj.normals.items[vn_idx][2];
+
+            indices[i*3 + j] = @intCast(i*3 + j);
+        }
     }
-    return indices;
+
+    return .{ .vertices = vertices, .indices = indices };
 }

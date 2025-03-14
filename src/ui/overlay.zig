@@ -56,6 +56,10 @@ pub const OverlayState = struct {
     }
 };
 
+// General purpose allocator
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
+
 /// Initializes ImGui context
 pub fn init(win: *const glfw.Window) void {
     c.InitImgui(win.handle);
@@ -115,7 +119,7 @@ fn loadNewObject(objPath: []const u8, mtlPath: []const u8, state: *OverlayState)
     _ = mtlPath;
 
     // Clean and validate obj path
-    const cleanObjPath = validator.cleanPath(objPath);
+    const cleanObjPath = try validator.cleanPath(allocator, objPath);
     if (!cleanObjPath.isValid()) {
         state.setErrorMessage(cleanObjPath.getErrorMessage()); // Display error message
         return;
@@ -123,7 +127,7 @@ fn loadNewObject(objPath: []const u8, mtlPath: []const u8, state: *OverlayState)
 
     mesh.deinit(); // Unload current object
 
-    try mesh.load(cleanObjPath.value.?);
+    try mesh.load(cleanObjPath.unwrap());
 }
 
 /// UI part that handles transformation editing

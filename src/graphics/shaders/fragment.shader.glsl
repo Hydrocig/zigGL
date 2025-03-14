@@ -1,7 +1,10 @@
 #version 450 core
 
+in vec2 UV;
 out vec4 FragColor;
 
+uniform sampler2D texture_diffuse;
+
 void main() {
-    FragColor = vec4(0.45, 0.24, 0.24, 1.0);
+    FragColor = texture(texture_diffuse, UV);
 }

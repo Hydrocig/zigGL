@@ -25,6 +25,7 @@ pub fn main() !void {
 
     // Zstbi initialization
     zstbi.init(allocator);
+    zstbi.setFlipVerticallyOnLoad(true);
     //defer zstbi.deinit();
 
     // GLFW initialization
@@ -68,6 +69,16 @@ pub fn main() !void {
 
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // Bind the shader program
+        if (mesh.loadedObject.object.materials.items.len > 0) {
+            const material = mesh.loadedObject.object.materials.items[0];
+            if (material.textureId != 0) {
+                gl.ActiveTexture(gl.TEXTURE0);
+                gl.BindTexture(gl.TEXTURE_2D, material.textureId);
+                gl.Uniform1i(gl.GetUniformLocation(program, "texture_diffuse"), 0);
+            }
+        }
 
         // Update transformations based on input state
         updateTransforms(&rotation, &translation, &scale, &state);

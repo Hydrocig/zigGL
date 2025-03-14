@@ -7,6 +7,7 @@ const io = std.io;
 const mem = std.mem;
 
 const std = @import("std");
+const gl = @import("gl");
 const zstbi = @import("zstbi");
 
 const validator = @import("../util/validator.zig");
@@ -24,7 +25,13 @@ pub const Vertex = extern struct { position: [3]f32 };
 ///
 /// Contains:
 /// - face: indices of the vertices
-pub const Face = struct { face: [3]usize };
+/// - texCoordIndices: indices of the texture coordinates
+/// - normalIndices: indices of the normals
+pub const Face = struct {
+    face: [3]usize,
+    texCoordIndices: [3]usize,
+    normalIndices: [3]usize,
+};
 
 /// Object struct
 ///
@@ -35,6 +42,8 @@ pub const Face = struct { face: [3]usize };
 /// - texCoords: texture coordinates of the object
 /// - name: name of the object
 /// - allocator: memory allocator
+/// - materials: list of materials
+/// - currentMaterialName: name of the current material
 /// deinit method
 pub const ObjectStruct = struct {
     vbo: std.ArrayList(Vertex),         // v
@@ -42,8 +51,10 @@ pub const ObjectStruct = struct {
     normals: std.ArrayList([3]f32),     // vn
     texCoords: std.ArrayList([2]f32),   // vt
     name: std.ArrayList(u8),            // o
-    allocator: std.mem.Allocator,
-    material: Material,
+    allocator: std.mem.Allocator,                   // Memory allocator
+    materials: std.ArrayList(Material),             // List of materials
+    faceMaterialIndices: std.ArrayList(usize),      // Material index per face
+    currentMaterialName: ?[]const u8,               // Current material name
 
     /// Deinitialize the object (vbo, ebo, name)
     pub fn deinit(self: *ObjectStruct) void {
@@ -52,6 +63,8 @@ pub const ObjectStruct = struct {
         self.normals.deinit();
         self.texCoords.deinit();
         self.name.deinit();
+        self.materials.deinit();
+        self.faceMaterialIndices.deinit();
     }
 };
 
@@ -71,6 +84,18 @@ pub const Material = struct {
     specular: [3]f32,               // Ks
     texturePath: ?[]const u8,       // map_Kd
     texture: ?zstbi.Image = undefined,
+    textureId: gl.uint = undefined,
+
+
+    pub fn deinit(self: *Material, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        if (self.texture_image) |*image| {
+            image.deinit(); // Free CPU image data
+        }
+        if (self.texture_id != 0) {
+            gl.DeleteTextures(1, &self.texture_id); // Free GPU texture
+        }
+    }
 };
 
 /// Load the .obj file
@@ -83,13 +108,9 @@ pub fn load(objPath: []const u8, allocator: std.mem.Allocator) !ObjectStruct {
         .texCoords = std.ArrayList([2]f32).init(allocator),
         .name = std.ArrayList(u8).init(allocator),
         .allocator = allocator,
-        .material = .{
-            .name = undefined,
-            .ambient = undefined,
-            .diffuse = undefined,
-            .specular = undefined,
-            .texturePath = undefined,
-        }
+        .materials = std.ArrayList(Material).init(allocator),
+        .faceMaterialIndices = std.ArrayList(usize).init(allocator),
+        .currentMaterialName = undefined,
     };
 
     try parseObjFile(objPath, &object);
@@ -157,6 +178,10 @@ pub fn getMtlFilePath(allocator: std.mem.Allocator, objPath: []const u8) ![]cons
         }
     }
     var filename = objPath[filename_start..];
+    filename = std.mem.trim(u8, filename, " \t\r\n"); // Trim whitespace
+    if (std.mem.endsWith(u8, filename, ".obj")) {
+        filename = filename[0..filename.len - 4];
+    }
 
     // Remove the ".obj" extension if present.
     if (std.mem.endsWith(u8, filename, ".obj")) {
@@ -180,7 +205,9 @@ fn processObjLine(line: []const u8, obj: *ObjectStruct) !void {
     const content = if (space_index < line.len) line[space_index + 1..] else "";
 
     // Currently supported prefixes:
-    if (mem.eql(u8, prefix, "o")) {             // Object name
+    if (mem.eql(u8, prefix, "usemtl")) {        // Material for subsequent faces
+    obj.currentMaterialName = content;
+    } else if (mem.eql(u8, prefix, "o")) {      // Object name
         try handleObjectName(content, obj);
     } else if (mem.eql(u8, prefix, "v")) {      // Vertex
         try handleVertex(content, obj);
@@ -219,52 +246,100 @@ fn processMtlLine(line: []const u8, obj: *ObjectStruct) !void {
 
 /// Handle the name of the material
 fn handleName(content: []const u8, obj: *ObjectStruct) !void {
-    obj.material.name = content;
+    // Create a new material with default values
+    const material = Material{
+        .name = try obj.allocator.dupe(u8, content),
+        .ambient = [3]f32{ 0.2, 0.2, 0.2 }, // Default value
+        .diffuse = [3]f32{ 0.8, 0.8, 0.8 }, // Default value
+        .specular = [3]f32{ 0.0, 0.0, 0.0 }, // Default value
+        .texturePath = null,
+        .texture = null,
+    };
+
+    try obj.materials.append(material);
 }
 
 /// Handle the ambient color of the material
 fn handleAmbient(content: []const u8, obj: *ObjectStruct) !void {
+    // Ensure there's at least one material
+    if (obj.materials.items.len == 0) return error.NoMaterialDefined;
+
+    // Get the last material (current one being parsed)
+    var material = &obj.materials.items[obj.materials.items.len - 1];
     const ambient = try get3CoordsFromString(content);
 
-    // Add the parsed components to the material struct
-    obj.material.ambient[0] = ambient[0];
-    obj.material.ambient[1] = ambient[1];
-    obj.material.ambient[2] = ambient[2];
+    material.ambient = ambient;
 }
 
 /// Handle the diffuse color of the material
 fn handleDiffuse(content: []const u8, obj: *ObjectStruct) !void {
+    if (obj.materials.items.len == 0) return error.NoMaterialDefined;
+    var material = &obj.materials.items[obj.materials.items.len - 1];
     const diffuse = try get3CoordsFromString(content);
 
-    // Add the parsed components to the material struct
-    obj.material.diffuse[0] = diffuse[0];
-    obj.material.diffuse[1] = diffuse[1];
-    obj.material.diffuse[2] = diffuse[2];
+    material.diffuse = diffuse;
 }
 
 /// Handle the specular color of the material
 fn handleSpecular(content: []const u8, obj: *ObjectStruct) !void {
+    if (obj.materials.items.len == 0) return error.NoMaterialDefined;
+    var material = &obj.materials.items[obj.materials.items.len - 1];
     const specular = try get3CoordsFromString(content);
 
-    // Add the parsed components to the material struct
-    obj.material.specular[0] = specular[0];
-    obj.material.specular[1] = specular[1];
-    obj.material.specular[2] = specular[2];
+    material.specular = specular;
 }
 
 /// Handle the texture path of the material
 fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
-    obj.material.texturePath = content;
+    if (obj.materials.items.len == 0) return error.NoMaterialDefined;
+    var material = &obj.materials.items[obj.materials.items.len - 1];
 
-    // Build the final path
-    var parts = [_][]const u8{objDir, "/", content};
-    const filePath = try std.mem.concat(obj.allocator, u8, &parts);
+    // Build the final path (combine objDir and texture path)
+    const texture_path = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
+    defer obj.allocator.free(texture_path);
 
     // Convert to null-terminated string
-    const texture_path_z = try obj.allocator.dupeZ(u8, filePath);
+    const texture_path_z = try obj.allocator.dupeZ(u8, texture_path);
+    defer obj.allocator.free(texture_path_z);
 
-    // Load the texture from the file with given path and 4 channels (RGBA)
-    obj.material.texture = try zstbi.Image.loadFromFile(texture_path_z, 4);
+    // Load the texture and store it in the material
+    material.texture = try zstbi.Image.loadFromFile(texture_path_z, 4);
+
+    // Generate the texture
+    var textureId: gl.uint = 0;
+    gl.GenTextures(1, (&textureId)[0..1]);
+    gl.BindTexture(gl.TEXTURE_2D, textureId);
+
+    // Set texture parameters
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    // Upload texture data to GPU
+    var format: gl.@"enum" = undefined;
+    if(material.texture.?.num_components == 3) {
+        format = gl.RGB;
+    } else if (material.texture.?.num_components == 4) {
+        format = gl.RGBA;
+    } else {
+        format = gl.RGBA; // Fallback;
+    }
+
+    // Create the texture
+    gl.TexImage2D(
+        gl.TEXTURE_2D,
+        0,
+        @intCast(format),
+        @intCast(material.texture.?.width),
+        @intCast(material.texture.?.height),
+        0,
+        format,
+        gl.UNSIGNED_BYTE,
+        material.texture.?.data.ptr,
+    );
+
+    material.textureId = textureId; // Store the texture ID
 }
 
 /// Add the object name to the object struct
@@ -288,21 +363,46 @@ fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
 
 /// Add a face to the object struct
 fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
-    var indices: [3]usize = undefined;
-    var components = mem.split(u8, content, " ");
 
-    // Parse the components into the face struct components (indices)
-    for (&indices) |*index| {
-        const component = components.next() orelse return error.InvalidFace;
+    var face = Face{
+        .face = undefined,              // Vertex indices
+        .texCoordIndices = undefined,   // Texture coordinate indices
+        .normalIndices = undefined,     // Normal indices
+    };
+
+    // Trim leading/trailing whitespace and line endings
+    const trimmed_line = mem.trim(u8, content, &std.ascii.whitespace ++ "\r");
+    var components = mem.split(u8, trimmed_line, " ");
+    var i: usize = 0; // Explicit loop index
+
+    while (components.next()) |component| : (i += 1) {
+        if (i >= 3) break; // Only handle triangles for now
+
         var iter = mem.split(u8, component, "/");
+        const vIdxStr = iter.next() orelse return error.InvalidFace;
+        face.face[i] = (try std.fmt.parseInt(usize, vIdxStr, 10)) - 1; // 0-based
 
-        const idx_str = iter.next() orelse return error.InvalidFace;
-        index.* = (try std.fmt.parseInt(usize, idx_str, 10)) - 1; // 0-based
+        // Parse texture coordinate index (vt)
+        if (iter.next()) |vtIdxStr| {
+            face.texCoordIndices[i] = (try std.fmt.parseInt(usize, vtIdxStr, 10)) - 1;
+        }
 
-        // Skip texture and normal indices
+        // Parse normal index (vn)
+        if (iter.next()) |vnIdxStr| {
+            face.normalIndices[i] = (try std.fmt.parseInt(usize, vnIdxStr, 10)) - 1;
+        }
     }
 
-    try obj.ebo.append(Face{ .face = indices });
+    // Find material index for the current face
+    const materialIndex = if (obj.currentMaterialName) |name| blk: {
+        for (obj.materials.items, 0..) |mat, idx| {
+            if (mem.eql(u8, mat.name, name)) break :blk idx;
+        }
+        break :blk 0; // Fallback to first material
+    } else 0;
+
+    try obj.ebo.append(face);
+    try obj.faceMaterialIndices.append(materialIndex);
 }
 
 /// Handle the texture coordinate of the face
