@@ -3,8 +3,14 @@
 in vec2 UV;
 out vec4 FragColor;
 
-uniform sampler2D texture_diffuse;
+uniform sampler2D textureDiffuse;
+uniform bool useTexture;
+uniform vec4 defaultColor;
 
 void main() {
-    FragColor = texture(texture_diffuse, UV);
+    if (useTexture) {
+        FragColor = texture(textureDiffuse, UV);
+    } else {
+        FragColor = defaultColor;
+    }
 }

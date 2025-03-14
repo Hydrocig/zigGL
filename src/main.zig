@@ -70,13 +70,21 @@ pub fn main() !void {
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-        // Bind the shader program
-        if (mesh.loadedObject.object.materials.items.len > 0) {
+        const useTexture = mesh.loadedObject.object.materials.items.len > 0;
+        gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), @intFromBool(useTexture));
+
+        // Bind the shader program with default texture
+        if (!useTexture) {
+            gl.Uniform4f(gl.GetUniformLocation(program, "defaultColor"), 0.4, 0.4, 0.4, 1.0);
+        }
+
+        // Bind the shader program with texture
+        if (useTexture) {
             const material = mesh.loadedObject.object.materials.items[0];
             if (material.textureId != 0) {
                 gl.ActiveTexture(gl.TEXTURE0);
                 gl.BindTexture(gl.TEXTURE_2D, material.textureId);
-                gl.Uniform1i(gl.GetUniformLocation(program, "texture_diffuse"), 0);
+                gl.Uniform1i(gl.GetUniformLocation(program, "textureDiffuse"), 0);
             }
         }
 
