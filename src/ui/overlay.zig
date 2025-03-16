@@ -108,21 +108,13 @@ fn filePanel(state: *OverlayState) !void {
     c.Separator();
 }
 
-/// Loads new object from .obj and .mtl paths
+/// Loads new object from .obj path
 fn loadNewObject(objPath: []const u8, state: *OverlayState) !void {
-    // Clean and validate obj path
-    const cleanObjPath = try validator.cleanPath(allocator, objPath);
-    if (!cleanObjPath.isValid()) {
-        state.setErrorMessage(cleanObjPath.getErrorMessage());
-        return;
-    }
-
     // Clear any previous errors
     errors.errorCollector.clearError();
 
-    mesh.deinit(); // Unload current object
-
-    try mesh.load(cleanObjPath.unwrap());
+    mesh.deinit();
+    try mesh.load(objPath);
 
     // Check if errorCollector has any error to display
     if (errors.errorCollector.getLastErrorMessage()) |errorMsg| {

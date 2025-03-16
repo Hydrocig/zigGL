@@ -7,6 +7,7 @@ const gl = @import("gl");
 const objectLoader = @import("objectLoader.zig");
 const std = @import("std");
 
+const validator = @import("../util/validator.zig");
 const errors = @import("../util/errors.zig");
 
 /// Mesh struct
@@ -25,7 +26,7 @@ pub const Mesh = struct {
     object: *objectLoader.ObjectStruct,
 
     pub fn init() !void {
-        try load("objects/cube.obj"); // Load default cube
+        try load("cube"); // Load default cube
     }
 
     /// Deinitialize the mesh (vao, vbo, ebo)
@@ -48,9 +49,15 @@ pub var loadedObject: Mesh = undefined;
 
 /// Load the mesh from the .obj file using the objectLoader
 pub fn load(path: []const u8) !void {
-    // Load object;
+    // Clean and validate obj path
+    const cleanObjPath = try validator.cleanPath(allocator, path);
+    if (cleanObjPath.len == 0) {
+        return;
+    }
+
     const obj = try allocator.create(objectLoader.ObjectStruct);
-    obj.* = try objectLoader.load(path, allocator);
+
+    obj.* = try objectLoader.load(cleanObjPath, allocator);
 
     // Convert faces to indices
     const interleaved  = try convertFaces(obj, allocator);

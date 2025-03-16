@@ -14,7 +14,12 @@ pub fn trimString(str: []const u8) []const u8 {
 }
 
 /// Validates and cleans up a path string
-pub fn cleanPath(allocator: std.mem.Allocator, path: []const u8) !result.Result([]const u8) {
+pub fn cleanPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
+    // Check if path points to default objects
+    if (!std.mem.eql(u8, path, "")) {
+        return checkPredefinedObjects(trimString(path));
+    }
+
     // Convert backslashes to forward slashes
     var buffer: [256]u8 = undefined;
     _ = std.mem.replace(u8, path, "\\", "/", buffer[0..]);
@@ -23,13 +28,32 @@ pub fn cleanPath(allocator: std.mem.Allocator, path: []const u8) !result.Result(
     const trimmed = trimString(buffer[0..path.len]);
 
     // Validate Path
-    if (trimmed.len >= 256) return result.Result([]const u8).failure(.PathTooLong);
-    if (trimmed.len == 0) return result.Result([]const u8).failure(.EmptyPath);
-    if (!std.fs.path.isAbsolute(trimmed)) return result.Result([]const u8).failure(.InvalidPath);
+    if (trimmed.len >= 256) {
+        errors.errorCollector.reportError(errors.ErrorCode.PathTooLong);
+        return "";
+    }
+    if (trimmed.len == 0) {
+        errors.errorCollector.reportError(errors.ErrorCode.EmptyPath);
+        return "";
+    }
+    if (!std.fs.path.isAbsolute(trimmed)) {
+        errors.errorCollector.reportError(errors.ErrorCode.InvalidPath);
+        return "";
+    }
 
     // Duplicate and return
     const stable_slice = try allocator.dupe(u8, trimmed);
-    return result.Result([]const u8).success(stable_slice);
+    return stable_slice;
+}
+
+/// Checks if the path points to a predefined object
+fn checkPredefinedObjects(path: []const u8) []const u8 {
+    if (std.mem.eql(u8, path, "cube")) {
+        return "objects/cube.obj";
+    } else if (std.mem.eql(u8, path, "cat")) {
+        return "objects/cat/cat.obj";
+    }
+    return "";
 }
 
 /// Checks if a file exists
