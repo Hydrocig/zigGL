@@ -48,7 +48,9 @@ pub const Face = struct {
 /// - allocator: memory allocator
 /// - materials: list of materials
 /// - currentMaterialName: name of the current material
+///
 /// deinit method
+/// deinitMaterials method
 pub const ObjectStruct = struct {
     vbo: std.ArrayList(Vertex), // v
     ebo: std.ArrayList(Face), // f
@@ -68,8 +70,19 @@ pub const ObjectStruct = struct {
         self.normals.deinit();
         self.texCoords.deinit();
         self.name.deinit();
-        self.materials.deinit();
         self.faceMaterialIndices.deinit();
+
+        self.mtllib = undefined;
+        self.currentMaterialName = undefined;
+
+        deinitMaterials(self);
+        self.materials.deinit();
+    }
+
+    fn deinitMaterials(self: *ObjectStruct) void {
+        for (self.materials.items) |*material| {
+            material.deinit(self.allocator);
+        }
     }
 };
 
@@ -82,6 +95,8 @@ pub const ObjectStruct = struct {
 /// - specular: specular color
 /// - texturePath: path to the texture
 /// - texture: zstbi.Image struct
+///
+/// deinit method
 pub const Material = struct {
     name: []const u8, // o
     ambient: [3]f32, // Ka
@@ -93,12 +108,16 @@ pub const Material = struct {
 
     pub fn deinit(self: *Material, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
-        if (self.texture_image) |*image| {
+        if (self.texture) |*image| {
             image.deinit(); // Free CPU image data
         }
-        if (self.texture_id != 0) {
-            gl.DeleteTextures(1, &self.texture_id); // Free GPU texture
+        if (self.textureId != 0) {
+            gl.DeleteTextures(1, (&self.textureId)[0..1]); // Free GPU texture
         }
+
+        self.texturePath = undefined;
+        self.texture = undefined;
+        self.textureId = 0;
     }
 };
 
@@ -147,6 +166,7 @@ fn parseObjFile(path: []const u8, object: *ObjectStruct) !void {
 
 /// Parse the .mtl file
 fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
+    endOfMtl = false;
     // Get mtl file path from obj file location
     const mtlPath = try getMtlFilePath(object, path);
 
