@@ -9,6 +9,8 @@ struct GLFWwindow;
 const ImVec4 RED = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 const ImVec4 GREEN = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
 
+int ImGuiInputTextFlagsEnterReturnsTrue = ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue;
+
 void InitImgui(void* window) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();

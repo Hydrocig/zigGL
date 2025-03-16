@@ -97,10 +97,10 @@ fn filePanel(state: *OverlayState) !void {
     // OBJ file path
     c.Text("OBJ");
     c.SameLine(0, 18);
-    _ = c.InputTextWithHint("##obj", "Path to .obj file", &state.objPath, state.objPath.len, 0, null, null);
+    const enterPressed = c.InputTextWithHint("##obj", "Path to .obj file", &state.objPath, state.objPath.len, c.ImGuiInputTextFlagsEnterReturnsTrue, null, null);
 
     // Load button
-    if (c.Button("Load")) {
+    if (c.Button("Load") or enterPressed) {
         try loadNewObject(&state.objPath, state);
     }
     c.SameLine(10, 35);

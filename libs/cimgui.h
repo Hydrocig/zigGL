@@ -7,6 +7,8 @@ extern "C" {
 #include <stdbool.h>
 #include <float.h>
 
+    extern int ImGuiInputTextFlagsEnterReturnsTrue;
+
     struct GLFWwindow;
     struct ImVec2;
     struct ImVec4;
@@ -16,7 +18,6 @@ extern "C" {
     typedef int ImGuiInputTextFlags;
     typedef int ImGuiSliderFlags;
     typedef int (*ImGuiInputTextCallback)(struct ImGuiInputTextCallbackData* data);
-
 
     void ImGuiCheckVersion();
 
