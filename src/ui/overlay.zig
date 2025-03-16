@@ -177,7 +177,7 @@ fn transformationPanel(state: *OverlayState) void {
             // Scale
             c.Text("Scale: ");
             c.SameLine(0, 10);
-            _ = c.DragFloat("##scale", &state.scale, 0.004, 0.1, 500.0, "%.02f", 0);
+            _ = c.DragFloat("##scale", &state.scale, 0.004, 0.01, 500.0, "%.02f", 0);
 
             c.NewLine();
         }

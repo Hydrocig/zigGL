@@ -122,6 +122,10 @@ pub fn main() !void {
 /// Values come from the window state (mouse and keyboard input from callbacks)
 fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath.Mat, state: *window.WindowState) void {
     if(state.overlayState.manualEdit) {
+        // Disable accidental input in background
+        state.keys = .none;
+        state.mouse.justPressed = true;
+
         updateTransformsOverlay(rotation, translation, scale, state);
     }
 

@@ -156,7 +156,8 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
     }
 
     // Open the file
-    const file = try fs.cwd().openFile(mtlPath, .{});
+    const newMtlPath = validator.trimString(mtlPath);
+    const file = try fs.cwd().openFile(newMtlPath, .{});
     defer file.close();
 
     // Read the file line by line
