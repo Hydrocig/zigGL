@@ -7,6 +7,8 @@ const gl = @import("gl");
 const objectLoader = @import("objectLoader.zig");
 const std = @import("std");
 
+const errors = @import("../util/errors.zig");
+
 /// Mesh struct
 ///
 /// Contains:
@@ -105,6 +107,12 @@ fn convertFaces(obj: *objectLoader.ObjectStruct, faceAllocator: std.mem.Allocato
     const vert_count = face_count * 3; // 3 vertices per face
     const vertices = try faceAllocator.alloc(f32, vert_count * 8); // 3 positions + 2 UVs + 3 normals = 8 floats per vertex
     const indices = try faceAllocator.alloc(u32, vert_count);
+
+    // Check if the object has the necessary data
+    if(obj.vbo.items.len == 0 or obj.ebo.items.len == 0 or obj.texCoords.items.len == 0 or obj.normals.items.len == 0) {
+        errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+        return .{ .vertices = vertices, .indices = indices };
+    }
 
     // Iterate over faces and fill the vertices and indices arrays
     for (obj.ebo.items, 0..) |face, i| {

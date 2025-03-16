@@ -32,6 +32,7 @@ pub const ErrorCode = enum {
     EmptyPath,
     PathTooLong,
     MtlFileNotFound,
+    ObjFileMalformed,
 
     pub fn getMessage(self: ErrorCode) []const u8 {
         return switch (self) {
@@ -40,6 +41,7 @@ pub const ErrorCode = enum {
             .EmptyPath => "Path cannot be empty",
             .PathTooLong => "Path is too long (max 255 characters)",
             .MtlFileNotFound => "Material file not found",
+            .ObjFileMalformed => "Object file is malformed / format not yet supported",
         };
     }
 };
