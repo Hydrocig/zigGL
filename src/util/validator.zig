@@ -2,7 +2,6 @@
 
 const std = @import("std");
 
-const result = @import("./result.zig");
 const errors = @import("./errors.zig");
 
 /// Trims a string by removing whitespace and quotes

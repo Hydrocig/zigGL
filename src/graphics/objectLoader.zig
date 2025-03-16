@@ -12,7 +12,6 @@ const zstbi = @import("zstbi");
 
 const overlay = @import("../ui/overlay.zig");
 const errors = @import("../util/errors.zig");
-const result = @import("../util/result.zig");
 const validator = @import("../util/validator.zig");
 
 var endOfMtl: bool = false; // Flag to stop parsing .mtl file
