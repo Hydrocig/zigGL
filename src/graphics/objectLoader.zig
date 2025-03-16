@@ -382,45 +382,82 @@ fn handleVertex(content: []const u8, obj: *ObjectStruct) !void {
 
 /// Add a face to the object struct
 fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
-    var face = Face{
-        .face = undefined, // Vertex indices
-        .texCoordIndices = undefined, // Texture coordinate indices
-        .normalIndices = undefined, // Normal indices
-    };
-
     // Trim leading/trailing whitespace and line endings
     const trimmed_line = mem.trim(u8, content, &std.ascii.whitespace ++ "\r");
     var components = mem.split(u8, trimmed_line, " ");
-    var i: usize = 0; // Explicit loop index
 
-    while (components.next()) |component| : (i += 1) {
-        if (i >= 3) break; // Only handle triangles for now
+    // Store all face components
+    var vertices = std.ArrayList(struct { v: usize, vt: usize, vn: usize }).init(obj.allocator);
+    defer vertices.deinit();
 
+    // Parse all components
+    while (components.next()) |component| {
         var iter = mem.split(u8, component, "/");
-        const vIdxStr = iter.next() orelse return error.InvalidFace;
-        face.face[i] = (try std.fmt.parseInt(usize, vIdxStr, 10)) - 1; // 0-based
 
-        // Parse texture coordinate index (vt)
-        if (iter.next()) |vtIdxStr| {
-            face.texCoordIndices[i] = (try std.fmt.parseInt(usize, vtIdxStr, 10)) - 1;
-        }
+        // Vertex index (required)
+        const vIdxStr = iter.next() orelse {
+            errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+            return;
+        };
+        const vIdx = (try std.fmt.parseInt(usize, vIdxStr, 10)) - 1;
 
-        // Parse normal index (vn)
-        if (iter.next()) |vnIdxStr| {
-            face.normalIndices[i] = (try std.fmt.parseInt(usize, vnIdxStr, 10)) - 1;
-        }
+        // Texture coordinate index (optional)
+        const vtIdx = if (iter.next()) |s|
+            if (s.len > 0) (try std.fmt.parseInt(usize, s, 10)) - 1 else 0
+        else
+            0;
+
+        // Normal index (optional)
+        const vnIdx = if (iter.next()) |s|
+            if (s.len > 0) (try std.fmt.parseInt(usize, s, 10)) - 1 else 0
+        else
+            0;
+
+        try vertices.append(.{ .v = vIdx, .vt = vtIdx, .vn = vnIdx });
     }
 
-    // Find material index for the current face
-    const materialIndex = if (obj.currentMaterialName) |name| blk: {
-        for (obj.materials.items, 0..) |mat, idx| {
-            if (mem.eql(u8, mat.name, name)) break :blk idx;
-        }
-        break :blk 0; // Fallback to first material
-    } else 0;
+    // Triangulate the face
+    const numVertices = vertices.items.len;
+    if (numVertices < 3) {
+        errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+        return;
+    }
 
-    try obj.ebo.append(face);
-    try obj.faceMaterialIndices.append(materialIndex);
+    const triangles = switch (numVertices) {
+        3 => &[_][3]usize{ .{ 0, 1, 2 } }, // Single triangle
+        4 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 } }, // Quad → 2 triangles
+        else => {
+            errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+            return;
+        }
+    };
+
+    // Add each triangle to EBO
+    for (triangles) |tri| {
+        var face = Face{
+            .face = undefined,
+            .texCoordIndices = undefined,
+            .normalIndices = undefined,
+        };
+
+        for (tri, 0..) |idx, i| {
+            const vertex = vertices.items[idx];
+            face.face[i] = vertex.v;
+            face.texCoordIndices[i] = vertex.vt;
+            face.normalIndices[i] = vertex.vn;
+        }
+
+        // Find material index for the current face
+        const materialIndex = if (obj.currentMaterialName) |name| blk: {
+            for (obj.materials.items, 0..) |mat, idx| {
+                if (mem.eql(u8, mat.name, name)) break :blk idx;
+            }
+            break :blk 0; // Fallback to first material
+        } else 0;
+
+        try obj.ebo.append(face);
+        try obj.faceMaterialIndices.append(materialIndex);
+    }
 }
 
 /// Handle the texture coordinate of the face
