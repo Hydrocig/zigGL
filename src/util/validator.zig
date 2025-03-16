@@ -15,7 +15,7 @@ pub fn trimString(str: []const u8) []const u8 {
 /// Validates and cleans up a path string
 pub fn cleanPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     // Check if path points to default objects
-    if (!std.mem.eql(u8, path, "")) {
+    if (checkPredefinedObjects(trimString(path)).len > 0) {
         return checkPredefinedObjects(trimString(path));
     }
 
