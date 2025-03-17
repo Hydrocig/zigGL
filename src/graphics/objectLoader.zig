@@ -212,6 +212,7 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
 
     if (!validator.fileExists(mtlPath)) {
         errors.errorCollector.reportError(errors.ErrorCode.MtlFileNotFound);
+        std.log.err("Mtl file does not exist!", .{});
         return;
     }
 
@@ -499,6 +500,7 @@ fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
         // Vertex index (required)
         const vIdxStr = iter.next() orelse {
             errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+            std.log.err("No further vertex index found!", .{});
             return;
         };
         const vIdx = (try std.fmt.parseInt(usize, vIdxStr, 10)) - 1;
@@ -522,14 +524,26 @@ fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
     const numVertices = vertices.items.len;
     if (numVertices < 3) {
         errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+        std.log.err("Too few Vertices for face (<3): {d}", .{numVertices});
+        std.log.err("CONTENT: {s}", .{content});
         return;
     }
 
     const triangles = switch (numVertices) {
         3 => &[_][3]usize{ .{ 0, 1, 2 } }, // Single triangle
         4 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 } }, // Quad → 2 triangles
+        5 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 } }, // Pentagon → 3 triangles
+        6 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 } }, // Hexagon → 4 triangles
+        7 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 }, .{ 0, 5, 6 } }, // Heptagon → 5 triangles
+        8 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 }, .{ 0, 5, 6 }, .{ 0, 6, 7 } }, // Octagon → 6 triangles
+        9 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 }, .{ 0, 5, 6 }, .{ 0, 6, 7 }, .{ 0, 7, 8 } }, // Nonagon → 7 triangles
+        10 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 }, .{ 0, 5, 6 }, .{ 0, 6, 7 }, .{ 0, 7, 8 }, .{ 0, 8, 9 } }, // Decagon → 8 triangles
+        11 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 }, .{ 0, 5, 6 }, .{ 0, 6, 7 }, .{ 0, 7, 8 }, .{ 0, 8, 9 }, .{ 0, 9, 10 } }, // Hendecagon → 9 triangles
+        12 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 }, .{ 0, 5, 6 }, .{ 0, 6, 7 }, .{ 0, 7, 8 }, .{ 0, 8, 9 }, .{ 0, 9, 10 }, .{ 0, 10, 11 } }, // Dodecagon → 10 triangles
         else => {
             errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+            std.log.err("Wrong Vertices amount for face: {d}", .{numVertices});
+            std.log.err("CONTENT: {s}", .{content});
             return;
         }
     };

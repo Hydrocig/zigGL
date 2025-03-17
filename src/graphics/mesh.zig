@@ -123,6 +123,7 @@ fn convertFaces(obj: *objectLoader.ObjectStruct, faceAllocator: std.mem.Allocato
     // Check if the object has the necessary data
     if(obj.vbo.items.len == 0 or obj.ebo.items.len == 0 or obj.texCoords.items.len == 0 or obj.normals.items.len == 0) {
         errors.errorCollector.reportError(errors.ErrorCode.ObjFileMalformed);
+        std.log.err("vbo len: {d}, ebo len: {d}, texCoord len: {d}, normal len: {d}", .{obj.vbo.items.len, obj.ebo.items.len, obj.texCoords.items.len, obj.normals.items.len});
         return .{ .vertices = vertices, .indices = indices };
     }
 

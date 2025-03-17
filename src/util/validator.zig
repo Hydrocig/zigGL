@@ -29,14 +29,17 @@ pub fn cleanPath(allocator: std.mem.Allocator, path: []const u8) ![]const u8 {
     // Validate Path
     if (trimmed.len >= 256) {
         errors.errorCollector.reportError(errors.ErrorCode.PathTooLong);
+        std.log.err("Path too long: {d}", .{trimmed.len});
         return "";
     }
     if (trimmed.len == 0) {
         errors.errorCollector.reportError(errors.ErrorCode.EmptyPath);
+        std.log.err("Path is empty: {d}", .{trimmed.len});
         return "";
     }
     if (!std.fs.path.isAbsolute(trimmed)) {
         errors.errorCollector.reportError(errors.ErrorCode.InvalidPath);
+        std.log.err("Path is not absolute: {s}", .{trimmed});
         return "";
     }
 
