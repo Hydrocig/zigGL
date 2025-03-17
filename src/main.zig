@@ -122,11 +122,11 @@ fn handleMaterialVisibility(program: c_uint, state: *window.WindowState) void {
     const useTexture = mesh.loadedObject.object.materials.items.len > 0;
     gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), @intFromBool(useTexture));
 
-        // Bind the shader program with texture
-        if (useTexture) {
+    // Bind the shader program with texture
+    if (useTexture) {
         const material = mesh.loadedObject.object.materials.items[0];
-            // Diffuse texture
-            if (material.textureId != 0 and state.overlayState.diffuseVisible) {
+        // Diffuse texture
+        if (material.textureId != 0 and state.overlayState.diffuseVisible) {
             gl.ActiveTexture(gl.TEXTURE0);
             gl.BindTexture(gl.TEXTURE_2D, material.textureId);
             gl.Uniform1i(gl.GetUniformLocation(program, "textureDiffuse"), 0);
@@ -139,8 +139,8 @@ fn handleMaterialVisibility(program: c_uint, state: *window.WindowState) void {
             gl.Uniform4f(gl.GetUniformLocation(program, "defaultColor"), 0.4, 0.4, 0.4, 1.0);
         }
 
-            // Normal texture
-            if (material.normalMapId != 0 and state.overlayState.normalVisible) {
+        // Normal texture
+        if (material.normalMapId != 0 and state.overlayState.normalVisible) {
             gl.ActiveTexture(gl.TEXTURE1);
             gl.BindTexture(gl.TEXTURE_2D, material.normalMapId);
             gl.Uniform1i(gl.GetUniformLocation(program, "textureNormal"), 1);
@@ -150,9 +150,25 @@ fn handleMaterialVisibility(program: c_uint, state: *window.WindowState) void {
             gl.BindTexture(gl.TEXTURE_2D, 0);
             gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 0);
         }
+
+        // Roughness texture
+        gl.Uniform3f(gl.GetUniformLocation(program, "materialSpecular"),
+            material.specular[0], material.specular[1], material.specular[2]);
+        gl.Uniform1f(gl.GetUniformLocation(program, "roughness"), 0.5); // Default roughness
+        if (material.roughnessMapId != 0 and state.overlayState.roughnessVisible) {
+            gl.ActiveTexture(gl.TEXTURE2);
+            gl.BindTexture(gl.TEXTURE_2D, material.roughnessMapId);
+            gl.Uniform1i(gl.GetUniformLocation(program, "textureRoughness"), 2);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useRoughnessMap"), 1);
+        } else {
+            gl.ActiveTexture(gl.TEXTURE2);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useRoughnessMap"), 0);
+        }
+
     } else {
-        // No texture available at all
-            gl.ActiveTexture(gl.TEXTURE0);
+        // Default shader
+        gl.ActiveTexture(gl.TEXTURE0);
         gl.BindTexture(gl.TEXTURE_2D, 0);
         gl.ActiveTexture(gl.TEXTURE1);
         gl.BindTexture(gl.TEXTURE_2D, 0);

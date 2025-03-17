@@ -8,23 +8,32 @@ out vec4 FragColor;
 
 uniform sampler2D textureDiffuse;
 uniform sampler2D textureNormal;
+uniform sampler2D textureRoughness;
+
 uniform bool useTexture;
 uniform bool useNormalMap;
+uniform bool useRoughnessMap;
+
 uniform vec4 defaultColor;
+
+// Material properties
+uniform vec3 materialSpecular;
+uniform float roughness;
+
+// Lighting uniforms
 uniform vec3 lightPos;
 uniform vec3 viewPos;
 
 void main() {
+    // Base color
     vec3 color = useTexture ? texture(textureDiffuse, UV).rgb : defaultColor.rgb;
 
     // Normal mapping
     vec3 normal = normalize(Normal);
     if (useNormalMap) {
-        // Extract normal from map
         vec3 normalMap = texture(textureNormal, UV).rgb;
         normalMap = normalize(normalMap * 2.0 - 1.0);
 
-        // Create TBN matrix
         vec3 T = normalize(Tangent);
         vec3 N = normalize(Normal);
         T = normalize(T - dot(T, N) * N);
@@ -34,15 +43,30 @@ void main() {
         normal = normalize(TBN * normalMap);
     }
 
-    // Simple lighting
-    vec3 lightDir = normalize(lightPos - FragPos);
-    float diff = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse = diff * vec3(1.0);
+    // Roughness sampling
+    float finalRoughness = roughness;
+    if (useRoughnessMap) {
+        finalRoughness = texture(textureRoughness, UV).r;
 
+    }
+
+    // Convert roughness to specular power (0-1 roughness to 32-2 exponent)
+    float specularPower = mix(32.0, 2.0, finalRoughness);
+
+    // Lighting calculations
+    vec3 lightDir = normalize(lightPos - FragPos);
+
+    // Diffuse
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 diffuse = diff * color;
+
+    // Specular
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, normal);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.5), 32.0);
-    vec3 specular = spec * vec3(0.5);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), specularPower);
+    vec3 specular = spec * materialSpecular;
 
-    FragColor = vec4((diffuse + specular) * color, 1.0);
+    // Combine results
+    vec3 finalColor = (diffuse + specular);
+    FragColor = vec4(finalColor, 1.0);
 }

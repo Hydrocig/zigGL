@@ -97,6 +97,9 @@ pub const ObjectStruct = struct {
 /// - normalMapPath: path to the normal map
 /// - normalMap: zstbi.Image struct
 /// - normalMapId: OpenGL texture ID
+/// - roughnessMapPath: path to the roughness map
+/// - roughnessMap: zstbi.Image struct
+/// - roughnessMapId: OpenGL texture ID
 ///
 /// deinit method
 pub const Material = struct {
@@ -104,12 +107,18 @@ pub const Material = struct {
     ambient: [3]f32, // Ka
     diffuse: [3]f32, // Kd
     specular: [3]f32, // Ks
+    // Texture
     texturePath: ?[]const u8, // map_Kd
     texture: ?zstbi.Image = undefined,
     textureId: gl.uint = undefined,
-    normalMapPath: ?[]const u8,
+    // Normal Map
+    normalMapPath: ?[]const u8, // map_Bump
     normalMap: ?zstbi.Image = undefined,
     normalMapId: gl.uint = undefined,
+    // Roughness
+    roughnessMapPath: ?[]const u8, // map_Pr
+    roughnessMap: ?zstbi.Image = undefined,
+    roughnessMapId: gl.uint = undefined,
 
     pub fn deinit(self: *Material, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
@@ -139,6 +148,17 @@ pub const Material = struct {
         self.normalMapPath = undefined;
         self.normalMap = undefined;
         self.normalMapId = 0;
+
+        // Roughness Map
+        if (self.roughnessMap) |*image| {
+            image.deinit();
+        }
+        if (self.roughnessMapId != 0) {
+            gl.DeleteTextures(1, (&self.roughnessMapId)[0..1]);
+        }
+        if (self.roughnessMapPath) |path| {
+            allocator.free(path);
+        }
     }
 };
 
@@ -271,10 +291,12 @@ fn processMtlLine(line: []const u8, obj: *ObjectStruct) !void {
         try handleDiffuse(content, obj);
     } else if (mem.eql(u8, prefix, "Ks")) { // Specular
         try handleSpecular(content, obj);
-    }else if (mem.eql(u8, prefix, "map_Bump")) { // Normal map
+    } else if (mem.eql(u8, prefix, "map_Bump")) { // Normal map
         try handleNormalMapPath(content, obj);
     } else if (mem.eql(u8, prefix, "map_Kd")) { // TexturePath
         try handleTexturePath(content, obj);
+    } else if (mem.eql(u8, prefix, "map_Pr")) { // Roughness map
+        try handleRoughnessMapPath(content, obj);
     }
 }
 
@@ -290,6 +312,8 @@ fn handleName(content: []const u8, obj: *ObjectStruct) !void {
         .texture = null,
         .normalMapPath = null,
         .normalMap = null,
+        .roughnessMapPath = null,
+        .roughnessMap = null,
     };
 
     try obj.materials.append(material);
@@ -347,6 +371,17 @@ fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
     material.texturePath = result.path;
 }
 
+/// Handle the roughness map path of material
+fn handleRoughnessMapPath(content: []const u8, obj: *ObjectStruct) !void {
+    if (obj.materials.items.len == 0) return error.NoMaterialDefined;
+    var material = &obj.materials.items[obj.materials.items.len - 1];
+
+    const result = try loadTextureFromFile(obj, content, 4);
+    material.roughnessMap = result.image;
+    material.roughnessMapId = result.textureId;
+    material.roughnessMapPath = result.path;
+}
+
 /// Load a texture from a file
 fn loadTextureFromFile(obj: *ObjectStruct, content: []const u8, components: u8) !struct {
     image: zstbi.Image,
@@ -382,12 +417,21 @@ fn loadTextureFromFile(obj: *ObjectStruct, content: []const u8, components: u8) 
 
     // Determine format
     var format: gl.@"enum" = undefined;
-    if (image.num_components == 3) {
+    if (image.num_components == 1) {
+        format = gl.RED;
+    } else if (image.num_components == 3) {
         format = gl.RGB;
     } else if (image.num_components == 4) {
         format = gl.RGBA;
     } else {
         format = gl.RGBA; // Fallback
+    }
+
+    // Texture parameters for single channel images (swizzle)
+    if (image.num_components == 1) {
+        gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_SWIZZLE_G, gl.RED);
+        gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_SWIZZLE_B, gl.RED);
+        gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_SWIZZLE_A, gl.ONE);
     }
 
     // Upload texture data to GPU
