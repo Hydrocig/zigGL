@@ -46,8 +46,7 @@ void main() {
     // Roughness sampling
     float finalRoughness = roughness;
     if (useRoughnessMap) {
-        finalRoughness = texture(textureRoughness, UV).r;
-
+        finalRoughness = 1.0 - texture(textureRoughness, UV).r; // Invert roughness map (roughness is not glossiness)
     }
 
     // Convert roughness to specular power (0-1 roughness to 32-2 exponent)
