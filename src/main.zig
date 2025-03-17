@@ -81,10 +81,21 @@ pub fn main() !void {
         // Bind the shader program with texture
         if (useTexture) {
             const material = mesh.loadedObject.object.materials.items[0];
+            // Diffuse texture
             if (material.textureId != 0) {
                 gl.ActiveTexture(gl.TEXTURE0);
                 gl.BindTexture(gl.TEXTURE_2D, material.textureId);
                 gl.Uniform1i(gl.GetUniformLocation(program, "textureDiffuse"), 0);
+            }
+
+            // Normal mapping
+            if (material.normalMapId != 0) {
+                gl.ActiveTexture(gl.TEXTURE1);
+                gl.BindTexture(gl.TEXTURE_2D, material.normalMapId);
+                gl.Uniform1i(gl.GetUniformLocation(program, "textureNormal"), 1);
+                gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 1);
+            } else {
+                gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 0);
             }
         }
 
@@ -105,9 +116,24 @@ pub fn main() !void {
             0.25 * math.pi,
             state.width / state.height,
             0.1, 100);
-        const mvp = zmath.mul(zmath.mul(scale, rotation), zmath.mul(translation, zmath.mul(view, proj)));
 
-        gl.UniformMatrix4fv(0, 1, gl.FALSE, &mvp[0][0]);
+        // Calculate separate model matrix for lighting calculations
+        const model = zmath.mul(zmath.mul(scale, rotation), translation);
+        const mvp = zmath.mul(model, zmath.mul(view, proj));
+
+        // Set matrices
+        gl.UniformMatrix4fv(gl.GetUniformLocation(program, "MVP"), 1, gl.FALSE, &mvp[0][0]);
+        gl.UniformMatrix4fv(gl.GetUniformLocation(program, "Model"), 1, gl.FALSE, &model[0][0]);
+
+        // Set lighting uniforms
+        const lightPos = zmath.f32x4(2.0, 2.0, 2.0, 1.0);
+        gl.Uniform3f(gl.GetUniformLocation(program, "lightPos"),
+            lightPos[0], lightPos[1], lightPos[2]);
+
+        const viewPos = zmath.f32x4(0.0, 0.0, 3.0, 1.0);
+        gl.Uniform3f(gl.GetUniformLocation(program, "viewPos"),
+            viewPos[0], viewPos[1], viewPos[2]);
+
         gl.BindVertexArray(mesh.loadedObject.vao);
         gl.DrawElements(gl.TRIANGLES, @intCast(mesh.loadedObject.index_count), gl.UNSIGNED_INT, 0);
 

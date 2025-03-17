@@ -14,7 +14,6 @@ const overlay = @import("../ui/overlay.zig");
 const errors = @import("../util/errors.zig");
 const validator = @import("../util/validator.zig");
 
-var endOfMtl: bool = false; // Flag to stop parsing .mtl file
 var objDir: []const u8 = undefined; // Directory of the relevant files
 
 /// Vertex struct
@@ -94,6 +93,10 @@ pub const ObjectStruct = struct {
 /// - specular: specular color
 /// - texturePath: path to the texture
 /// - texture: zstbi.Image struct
+/// - textureId: OpenGL texture ID
+/// - normalMapPath: path to the normal map
+/// - normalMap: zstbi.Image struct
+/// - normalMapId: OpenGL texture ID
 ///
 /// deinit method
 pub const Material = struct {
@@ -104,6 +107,9 @@ pub const Material = struct {
     texturePath: ?[]const u8, // map_Kd
     texture: ?zstbi.Image = undefined,
     textureId: gl.uint = undefined,
+    normalMapPath: ?[]const u8,
+    normalMap: ?zstbi.Image = undefined,
+    normalMapId: gl.uint = undefined,
 
     pub fn deinit(self: *Material, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
@@ -113,10 +119,26 @@ pub const Material = struct {
         if (self.textureId != 0) {
             gl.DeleteTextures(1, (&self.textureId)[0..1]); // Free GPU texture
         }
-
+        if (self.texturePath) |path| {
+            allocator.free(path);
+        }
         self.texturePath = undefined;
         self.texture = undefined;
         self.textureId = 0;
+
+        // Normal Map
+        if (self.normalMap) |*image| {
+            image.deinit();
+        }
+        if (self.normalMapId != 0) {
+            gl.DeleteTextures(1, (&self.normalMapId)[0..1]);
+        }
+        if (self.normalMapPath) |path| {
+            allocator.free(path);
+        }
+        self.normalMapPath = undefined;
+        self.normalMap = undefined;
+        self.normalMapId = 0;
     }
 };
 
@@ -165,7 +187,6 @@ fn parseObjFile(path: []const u8, object: *ObjectStruct) !void {
 
 /// Parse the .mtl file
 fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
-    endOfMtl = false;
     // Get mtl file path from obj file location
     const mtlPath = try getMtlFilePath(object, path);
 
@@ -186,7 +207,6 @@ fn parseMtlFile(path: []const u8, object: *ObjectStruct) !void {
     var line_buf: [1024]u8 = undefined;
 
     while (try in_stream.readUntilDelimiterOrEof(&line_buf, '\n')) |line| {
-        if (endOfMtl) return;
         try processMtlLine(line, object);
     }
 }
@@ -251,9 +271,10 @@ fn processMtlLine(line: []const u8, obj: *ObjectStruct) !void {
         try handleDiffuse(content, obj);
     } else if (mem.eql(u8, prefix, "Ks")) { // Specular
         try handleSpecular(content, obj);
+    }else if (mem.eql(u8, prefix, "map_Bump")) { // Normal map
+        try handleNormalMapPath(content, obj);
     } else if (mem.eql(u8, prefix, "map_Kd")) { // TexturePath
         try handleTexturePath(content, obj);
-        endOfMtl = true;
     }
 }
 
@@ -267,6 +288,8 @@ fn handleName(content: []const u8, obj: *ObjectStruct) !void {
         .specular = [3]f32{ 0.0, 0.0, 0.0 }, // Default value
         .texturePath = null,
         .texture = null,
+        .normalMapPath = null,
+        .normalMap = null,
     };
 
     try obj.materials.append(material);
@@ -302,14 +325,68 @@ fn handleSpecular(content: []const u8, obj: *ObjectStruct) !void {
     material.specular = specular;
 }
 
-/// Handle the texture path of the material
+/// Handle normal map path of material
+fn handleNormalMapPath(content: []const u8, obj: *ObjectStruct) !void {
+    if (obj.materials.items.len == 0) return error.NoMaterialDefined;
+    var material = &obj.materials.items[obj.materials.items.len - 1];
+
+    // Path building
+    var normalPath: []const u8 = undefined;
+    if (validator.fileExists(content)) {
+        normalPath = content;
+    } else {
+        normalPath = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
+    }
+
+    // Convert to null-terminated string
+    const normalPathZ = try obj.allocator.dupeZ(u8, normalPath);
+    defer obj.allocator.free(normalPathZ);
+
+    // Loading image
+    material.normalMap = try zstbi.Image.loadFromFile(normalPathZ, 4);
+
+    // Generating OpenGl texture
+    var normalMapId: gl.uint = 0;
+    gl.GenTextures(1, (&normalMapId)[0..1]);
+    gl.BindTexture(gl.TEXTURE_2D, normalMapId);
+
+    // Texture parameters
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    // Upload texture data to GPU
+    var format: gl.@"enum" = undefined;
+    if (material.normalMap.?.num_components == 3) {
+        format = gl.RGB;
+    } else if (material.normalMap.?.num_components == 4) {
+        format = gl.RGBA;
+    } else {
+        format = gl.RGBA; // Fallback;
+    }
+
+    // Upload
+    gl.TexImage2D(gl.TEXTURE_2D, 0, @intCast(format),
+        @intCast(material.normalMap.?.width), @intCast(material.normalMap.?.height),
+        0, format, gl.UNSIGNED_BYTE, material.normalMap.?.data.ptr);
+
+    material.normalMapId = normalMapId;
+}
+
+/// Handle the texture path of material
 fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
     if (obj.materials.items.len == 0) return error.NoMaterialDefined;
     var material = &obj.materials.items[obj.materials.items.len - 1];
 
     // Build the final path (combine objDir and texture path)
-    const texture_path = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
-    defer obj.allocator.free(texture_path);
+    // If content is not absolute path
+    var texture_path: []const u8 = undefined;
+    if (validator.fileExists(content)) {
+        texture_path = content;
+    } else {
+        texture_path = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
+    }
 
     // Convert to null-terminated string
     const texture_path_z = try obj.allocator.dupeZ(u8, texture_path);
@@ -329,7 +406,7 @@ fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    // Upload texture data to GPU
+    // Format
     var format: gl.@"enum" = undefined;
     if (material.texture.?.num_components == 3) {
         format = gl.RGB;

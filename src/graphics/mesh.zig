@@ -82,16 +82,20 @@ pub fn load(path: []const u8) !void {
     gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, @intCast(interleaved.indices.len * @sizeOf(u32)), interleaved.indices.ptr, gl.STATIC_DRAW); // Fill the buffer with data
 
     // Position (location = 0)
-    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), 0);                  // Position
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 11 * @sizeOf(f32), 0);
     gl.EnableVertexAttribArray(0);
 
     // UVs (location = 1)
-    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), 3 * @sizeOf(f32));   // UVs
+    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, 11 * @sizeOf(f32), 3 * @sizeOf(f32));
     gl.EnableVertexAttribArray(1);
 
     // Normals (location = 2)
-    gl.VertexAttribPointer(2, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), 5 * @sizeOf(f32));   // Normals
+    gl.VertexAttribPointer(2, 3, gl.FLOAT, gl.FALSE, 11 * @sizeOf(f32), 5 * @sizeOf(f32));
     gl.EnableVertexAttribArray(2);
+
+    // Tangents (location = 3)
+    gl.VertexAttribPointer(3, 3, gl.FLOAT, gl.FALSE, 11 * @sizeOf(f32), 8 * @sizeOf(f32));
+    gl.EnableVertexAttribArray(3);
 
     // Set the currently loaded object
     loadedObject = Mesh{
@@ -109,10 +113,11 @@ pub fn deinit() void {
 }
 
 /// Convert faces to indices and generate interleaved vertex data
+/// Also calculates tangent vectors
 fn convertFaces(obj: *objectLoader.ObjectStruct, faceAllocator: std.mem.Allocator) !struct { vertices: []f32, indices: []u32 } {
     const face_count = obj.ebo.items.len;
     const vert_count = face_count * 3; // 3 vertices per face
-    const vertices = try faceAllocator.alloc(f32, vert_count * 8); // 3 positions + 2 UVs + 3 normals = 8 floats per vertex
+    const vertices = try faceAllocator.alloc(f32, vert_count * 11); // 3 positions + 2 UVs + 3 normals + 3 tangent = 11 floats per vertex
     const indices = try faceAllocator.alloc(u32, vert_count);
 
     // Check if the object has the necessary data
@@ -123,26 +128,76 @@ fn convertFaces(obj: *objectLoader.ObjectStruct, faceAllocator: std.mem.Allocato
 
     // Iterate over faces and fill the vertices and indices arrays
     for (obj.ebo.items, 0..) |face, i| {
+        // Get positions for face
+        const pos = [3][3]f32{
+            obj.vbo.items[face.face[0]].position,
+            obj.vbo.items[face.face[1]].position,
+            obj.vbo.items[face.face[2]].position,
+        };
+
+        // Get UVs for face
+        const uv = [3][2]f32{
+            obj.texCoords.items[face.texCoordIndices[0]],
+            obj.texCoords.items[face.texCoordIndices[1]],
+            obj.texCoords.items[face.texCoordIndices[2]],
+        };
+
+        // Calculate tangent vectors for face
+        const edge1 = [3]f32{
+            pos[1][0] - pos[0][0],
+            pos[1][1] - pos[0][1],
+            pos[1][2] - pos[0][2],
+        };
+
+        const edge2 = [3]f32{
+            pos[2][0] - pos[0][0],
+            pos[2][1] - pos[0][1],
+            pos[2][2] - pos[0][2],
+        };
+
+        // Calculate delta UVs
+        const deltaUV1 = [2]f32{
+            uv[1][0] - uv[0][0],
+            uv[1][1] - uv[0][1],
+        };
+
+        const deltaUV2 = [2]f32{
+            uv[2][0] - uv[0][0],
+            uv[2][1] - uv[0][1],
+        };
+
+        // Calculate tangent
+        const f = 1.0 / (deltaUV1[0] * deltaUV2[1] - deltaUV2[0] * deltaUV1[1]);
+        const tangent = [3]f32{
+            f * (deltaUV2[1] * edge1[0] - deltaUV1[1] * edge2[0]),
+            f * (deltaUV2[1] * edge1[1] - deltaUV1[1] * edge2[1]),
+            f * (deltaUV2[1] * edge1[2] - deltaUV1[1] * edge2[2]),
+        };
+
+        // Fill vertices and indices arrays
         for (0..3) |j| {
-            const v_idx = face.face[j];
-            const vt_idx = face.texCoordIndices[j];
             const vn_idx = face.normalIndices[j];
 
             // Positions
-            vertices[i*24 + j*8 + 0] = obj.vbo.items[v_idx].position[0];
-            vertices[i*24 + j*8 + 1] = obj.vbo.items[v_idx].position[1];
-            vertices[i*24 + j*8 + 2] = obj.vbo.items[v_idx].position[2];
+            vertices[i * 33 + j * 11 + 0] = pos[j][0];
+            vertices[i * 33 + j * 11 + 1] = pos[j][1];
+            vertices[i * 33 + j * 11 + 2] = pos[j][2];
 
             // UVs
-            vertices[i*24 + j*8 + 3] = obj.texCoords.items[vt_idx][0];
-            vertices[i*24 + j*8 + 4] = obj.texCoords.items[vt_idx][1];
+            vertices[i * 33 + j * 11 + 3] = uv[j][0];
+            vertices[i * 33 + j * 11 + 4] = uv[j][1];
 
             // Normals
-            vertices[i*24 + j*8 + 5] = obj.normals.items[vn_idx][0];
-            vertices[i*24 + j*8 + 6] = obj.normals.items[vn_idx][1];
-            vertices[i*24 + j*8 + 7] = obj.normals.items[vn_idx][2];
+            vertices[i * 33 + j * 11 + 5] = obj.normals.items[vn_idx][0];
+            vertices[i * 33 + j * 11 + 6] = obj.normals.items[vn_idx][1];
+            vertices[i * 33 + j * 11 + 7] = obj.normals.items[vn_idx][2];
 
-            indices[i*3 + j] = @intCast(i*3 + j);
+            // Tangents
+            vertices[i * 33 + j * 11 + 8] = tangent[0];
+            vertices[i * 33 + j * 11 + 9] = tangent[1];
+            vertices[i * 33 + j * 11 + 10] = tangent[2];
+
+            indices[i * 3 + j] = @intCast(i * 3 + j);
         }
     }
 
