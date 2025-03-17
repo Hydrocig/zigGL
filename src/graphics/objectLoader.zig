@@ -330,48 +330,10 @@ fn handleNormalMapPath(content: []const u8, obj: *ObjectStruct) !void {
     if (obj.materials.items.len == 0) return error.NoMaterialDefined;
     var material = &obj.materials.items[obj.materials.items.len - 1];
 
-    // Path building
-    var normalPath: []const u8 = undefined;
-    if (validator.fileExists(content)) {
-        normalPath = content;
-    } else {
-        normalPath = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
-    }
-
-    // Convert to null-terminated string
-    const normalPathZ = try obj.allocator.dupeZ(u8, normalPath);
-    defer obj.allocator.free(normalPathZ);
-
-    // Loading image
-    material.normalMap = try zstbi.Image.loadFromFile(normalPathZ, 4);
-
-    // Generating OpenGl texture
-    var normalMapId: gl.uint = 0;
-    gl.GenTextures(1, (&normalMapId)[0..1]);
-    gl.BindTexture(gl.TEXTURE_2D, normalMapId);
-
-    // Texture parameters
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-    // Upload texture data to GPU
-    var format: gl.@"enum" = undefined;
-    if (material.normalMap.?.num_components == 3) {
-        format = gl.RGB;
-    } else if (material.normalMap.?.num_components == 4) {
-        format = gl.RGBA;
-    } else {
-        format = gl.RGBA; // Fallback;
-    }
-
-    // Upload
-    gl.TexImage2D(gl.TEXTURE_2D, 0, @intCast(format),
-        @intCast(material.normalMap.?.width), @intCast(material.normalMap.?.height),
-        0, format, gl.UNSIGNED_BYTE, material.normalMap.?.data.ptr);
-
-    material.normalMapId = normalMapId;
+    const result = try loadTextureFromFile(obj, content, 4);
+    material.normalMap = result.image;
+    material.normalMapId = result.textureId;
+    material.normalMapPath = result.path;
 }
 
 /// Handle the texture path of material
@@ -379,58 +341,78 @@ fn handleTexturePath(content: []const u8, obj: *ObjectStruct) !void {
     if (obj.materials.items.len == 0) return error.NoMaterialDefined;
     var material = &obj.materials.items[obj.materials.items.len - 1];
 
-    // Build the final path (combine objDir and texture path)
-    // If content is not absolute path
-    var texture_path: []const u8 = undefined;
+    const result = try loadTextureFromFile(obj, content, 4);
+    material.texture = result.image;
+    material.textureId = result.textureId;
+    material.texturePath = result.path;
+}
+
+/// Load a texture from a file
+fn loadTextureFromFile(obj: *ObjectStruct, content: []const u8, components: u8) !struct {
+    image: zstbi.Image,
+    textureId: gl.uint,
+    path: []const u8
+}
+{
+    // Path building
+    var texturePath: []const u8 = undefined;
     if (validator.fileExists(content)) {
-        texture_path = content;
+        texturePath = content;
     } else {
-        texture_path = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
+        texturePath = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
     }
 
     // Convert to null-terminated string
-    const texture_path_z = try obj.allocator.dupeZ(u8, texture_path);
-    defer obj.allocator.free(texture_path_z);
+    const texturePathZ = try obj.allocator.dupeZ(u8, texturePath);
+    defer obj.allocator.free(texturePathZ);
 
-    // Load the texture and store it in the material
-    material.texture = try zstbi.Image.loadFromFile(texture_path_z, 4);
+    // Loading image
+    const image = try zstbi.Image.loadFromFile(texturePathZ, components);
 
-    // Generate the texture
+    // Generating OpenGL texture
     var textureId: gl.uint = 0;
     gl.GenTextures(1, (&textureId)[0..1]);
     gl.BindTexture(gl.TEXTURE_2D, textureId);
 
-    // Set texture parameters
+    // Texture parameters
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
-    // Format
+    // Determine format
     var format: gl.@"enum" = undefined;
-    if (material.texture.?.num_components == 3) {
+    if (image.num_components == 3) {
         format = gl.RGB;
-    } else if (material.texture.?.num_components == 4) {
+    } else if (image.num_components == 4) {
         format = gl.RGBA;
     } else {
-        format = gl.RGBA; // Fallback;
+        format = gl.RGBA; // Fallback
     }
 
-    // Create the texture
+    // Upload texture data to GPU
     gl.TexImage2D(
         gl.TEXTURE_2D,
         0,
         @intCast(format),
-        @intCast(material.texture.?.width),
-        @intCast(material.texture.?.height),
+        @intCast(image.width),
+        @intCast(image.height),
         0,
         format,
         gl.UNSIGNED_BYTE,
-        material.texture.?.data.ptr,
+        image.data.ptr
     );
 
-    material.textureId = textureId; // Store the texture ID
+    // Save path from file
+    const savedPath = try obj.allocator.dupe(u8, content);
+
+    return .{
+        .image = image,
+        .textureId = textureId,
+        .path = savedPath
+    };
 }
+
 
 /// Add the object name to the object struct
 fn handleObjectName(content: []const u8, obj: *ObjectStruct) !void {
