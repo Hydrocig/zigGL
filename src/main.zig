@@ -166,6 +166,19 @@ fn handleMaterialVisibility(program: c_uint, state: *window.WindowState) void {
             gl.Uniform1i(gl.GetUniformLocation(program, "useRoughnessMap"), 0);
         }
 
+        // Metallic texture
+        gl.Uniform1f(gl.GetUniformLocation(program, "metallic"), 0.0); // Default metallic
+        if (material.metallicMapId != 0 and state.overlayState.metallicVisible) {
+            gl.ActiveTexture(gl.TEXTURE3);
+            gl.BindTexture(gl.TEXTURE_2D, material.metallicMapId);
+            gl.Uniform1i(gl.GetUniformLocation(program, "textureMetallic"), 3);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useMetallicMap"), 1);
+        } else {
+            gl.ActiveTexture(gl.TEXTURE3);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useMetallicMap"), 0);
+        }
+
     } else {
         // Default shader
         gl.ActiveTexture(gl.TEXTURE0);

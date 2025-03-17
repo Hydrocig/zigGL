@@ -119,6 +119,10 @@ pub const Material = struct {
     roughnessMapPath: ?[]const u8, // map_Pr
     roughnessMap: ?zstbi.Image = undefined,
     roughnessMapId: gl.uint = undefined,
+    // Metallic
+    metallicMapPath: ?[]const u8, // map_Pm
+    metallicMap: ?zstbi.Image = undefined,
+    metallicMapId: gl.uint = undefined,
 
     pub fn deinit(self: *Material, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
@@ -157,6 +161,17 @@ pub const Material = struct {
             gl.DeleteTextures(1, (&self.roughnessMapId)[0..1]);
         }
         if (self.roughnessMapPath) |path| {
+            allocator.free(path);
+        }
+
+        // Metallic Map
+        if (self.metallicMap) |*image| {
+            image.deinit();
+        }
+        if (self.metallicMapId != 0) {
+            gl.DeleteTextures(1, (&self.metallicMapId)[0..1]);
+        }
+        if (self.metallicMapPath) |path| {
             allocator.free(path);
         }
     }
@@ -298,6 +313,8 @@ fn processMtlLine(line: []const u8, obj: *ObjectStruct) !void {
         try handleTexturePath(content, obj);
     } else if (mem.eql(u8, prefix, "map_Pr")) { // Roughness map
         try handleRoughnessMapPath(content, obj);
+    } else if (mem.eql(u8, prefix, "map_Pm")) { // Metallic map
+        try handleMetallicMapPath(content, obj);
     }
 }
 
@@ -315,6 +332,8 @@ fn handleName(content: []const u8, obj: *ObjectStruct) !void {
         .normalMap = null,
         .roughnessMapPath = null,
         .roughnessMap = null,
+        .metallicMapPath = null,
+        .metallicMap = null,
     };
 
     try obj.materials.append(material);
@@ -381,6 +400,17 @@ fn handleRoughnessMapPath(content: []const u8, obj: *ObjectStruct) !void {
     material.roughnessMap = result.image;
     material.roughnessMapId = result.textureId;
     material.roughnessMapPath = result.path;
+}
+
+/// Handle the metallic map path of material
+fn handleMetallicMapPath(content: []const u8, obj: *ObjectStruct) !void {
+    if (obj.materials.items.len == 0) return error.NoMaterialDefined;
+    var material = &obj.materials.items[obj.materials.items.len - 1];
+
+    const result = try loadTextureFromFile(obj, content, 1);
+    material.metallicMap = result.image;
+    material.metallicMapId = result.textureId;
+    material.metallicMapPath = result.path;
 }
 
 /// Load a texture from a file

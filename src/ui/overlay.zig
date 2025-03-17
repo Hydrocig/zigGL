@@ -44,6 +44,7 @@ pub const OverlayState = struct {
     diffuseVisible: bool = true,
     normalVisible: bool = true,
     roughnessVisible: bool = true,
+    metallicVisible: bool = true,
 
     /// Helper method to set error message
     pub fn setErrorMessage(self: *OverlayState, msg: []const u8) void {
@@ -196,6 +197,8 @@ fn materialPanel(state: *OverlayState) void {
             _ = c.Checkbox("Normal", &state.normalVisible);
             _ = c.TableNextColumn();
             _ = c.Checkbox("Roughness", &state.roughnessVisible);
+            _ = c.TableNextColumn();
+            _ = c.Checkbox("Metallic", &state.metallicVisible);
 
             c.EndTable();
         }
