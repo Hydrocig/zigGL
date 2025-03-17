@@ -5,11 +5,16 @@
 #include "backends/imgui_impl_opengl3.h"
 
 struct GLFWwindow;
+struct ImVec2;
 
 const ImVec4 RED = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 const ImVec4 GREEN = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
 
+const ImVec2 OUTER_SIZE = ImVec2(0.0f, 0.0f);
+const float INNER_WIDTH = 0.0f;
+
 int ImGuiInputTextFlagsEnterReturnsTrue = ImGuiInputTextFlags_::ImGuiInputTextFlags_EnterReturnsTrue;
+int ImGuiTableFlagsNone = ImGuiTableFlags_::ImGuiTableFlags_None;
 
 void InitImgui(void* window) {
     IMGUI_CHECKVERSION();
@@ -149,4 +154,24 @@ void NewLine() {
 
 void Separator(){
   ImGui::Separator();
+}
+
+bool BeginTable(const char* str_id, int columns, ImGuiTableFlags flags, const ImVec2* outer_size, float inner_width) {
+    return ImGui::BeginTable(str_id, columns, flags, *outer_size, inner_width);
+}
+
+bool BeginTable2(const char* str_id, int columns, ImGuiTableFlags flags) {
+    return ImGui::BeginTable(str_id, columns, flags, OUTER_SIZE, INNER_WIDTH);
+}
+
+void EndTable() {
+    ImGui::EndTable();
+}
+
+void TableNextRow(ImGuiTableRowFlags row_flags, float min_row_height) {
+    ImGui::TableNextRow(row_flags, min_row_height);
+}
+
+bool TableNextColumn() {
+    return ImGui::TableNextColumn();
 }

@@ -40,6 +40,10 @@ pub const OverlayState = struct {
     // Error message
     errorMessage: [128]u8 = [_]u8{0} ** 128,
 
+    // Material states
+    diffuseVisible: bool = true,
+    normalVisible: bool = true,
+
     /// Helper method to set error message
     pub fn setErrorMessage(self: *OverlayState, msg: []const u8) void {
         std.mem.copyForwards(u8, &self.errorMessage, msg);
@@ -86,6 +90,7 @@ pub fn draw(state: *window.WindowState) !void {
 
     try filePanel(&state.overlayState);
     transformationPanel(&state.overlayState);
+    materialPanel(&state.overlayState);
     resetButton(&state.overlayState);
 }
 
@@ -174,6 +179,25 @@ fn transformationPanel(state: *OverlayState) void {
             c.NewLine();
         }
     }
+    c.Separator();
+}
+
+/// UI part that handles material visibility
+fn materialPanel(state: *OverlayState) void {
+    c.ImGuiBeginGroup();
+    defer c.ImGuiEndGroup();
+
+    if (c.CollapsingHeaderStatic("Materials", 0)) {
+        if (c.BeginTable2("MaterialTable", 2, c.ImGuiTableFlagsNone)) {
+            _ = c.TableNextColumn();
+            _ = c.Checkbox("Diffuse", &state.diffuseVisible);
+            _ = c.TableNextColumn();
+            _ = c.Checkbox("Normal", &state.normalVisible);
+
+            c.EndTable();
+        }
+    }
+
     c.Separator();
 }
 

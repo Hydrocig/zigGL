@@ -8,6 +8,7 @@ extern "C" {
 #include <float.h>
 
     extern int ImGuiInputTextFlagsEnterReturnsTrue;
+    extern int ImGuiTableFlagsNone;
 
     struct GLFWwindow;
     struct ImVec2;
@@ -17,6 +18,8 @@ extern "C" {
     typedef int ImGuiTreeNodeFlags;
     typedef int ImGuiInputTextFlags;
     typedef int ImGuiSliderFlags;
+    typedef int ImGuiTableRowFlags;
+    typedef int ImGuiTableFlags;
     typedef int (*ImGuiInputTextCallback)(struct ImGuiInputTextCallbackData* data);
 
     void ImGuiCheckVersion();
@@ -49,6 +52,11 @@ extern "C" {
     void Text(const char* fmt, ...);
     void TextColoredRGBA(float r, float g, float b, float a, const char* fmt, ...);
     bool DragFloat(const char* label, float* v, float v_speed, float v_min, float v_max, const char* format, ImGuiSliderFlags flags);
+    bool BeginTable(const char* str_id, int columns, ImGuiTableFlags flags, const struct ImVec2* outer_size, float inner_width);
+    bool BeginTable2(const char* str_id, int columns, ImGuiTableFlags flags);
+    void EndTable();
+    void TableNextRow(ImGuiTableRowFlags row_flags, float min_row_height);
+    bool TableNextColumn();
 
     // Callbacks
     void ImGui_MouseButtonCallback(struct GLFWwindow* window, int button, int action, int mods);

@@ -73,30 +73,43 @@ pub fn main() !void {
         const useTexture = mesh.loadedObject.object.materials.items.len > 0;
         gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), @intFromBool(useTexture));
 
-        // Bind the shader program with default texture
-        if (!useTexture) {
-            gl.Uniform4f(gl.GetUniformLocation(program, "defaultColor"), 0.4, 0.4, 0.4, 1.0);
-        }
-
         // Bind the shader program with texture
         if (useTexture) {
             const material = mesh.loadedObject.object.materials.items[0];
             // Diffuse texture
-            if (material.textureId != 0) {
+            if (material.textureId != 0 and state.overlayState.diffuseVisible) {
                 gl.ActiveTexture(gl.TEXTURE0);
                 gl.BindTexture(gl.TEXTURE_2D, material.textureId);
                 gl.Uniform1i(gl.GetUniformLocation(program, "textureDiffuse"), 0);
+                gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), 1);
+            } else {
+                // Default when diffuse texture is disabled or not available
+                gl.ActiveTexture(gl.TEXTURE0);
+                gl.BindTexture(gl.TEXTURE_2D, 0);
+                gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), 0);
+                gl.Uniform4f(gl.GetUniformLocation(program, "defaultColor"), 0.4, 0.4, 0.4, 1.0);
             }
 
-            // Normal mapping
-            if (material.normalMapId != 0) {
+            // Normal texture
+            if (material.normalMapId != 0 and state.overlayState.normalVisible) {
                 gl.ActiveTexture(gl.TEXTURE1);
                 gl.BindTexture(gl.TEXTURE_2D, material.normalMapId);
                 gl.Uniform1i(gl.GetUniformLocation(program, "textureNormal"), 1);
                 gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 1);
             } else {
+                gl.ActiveTexture(gl.TEXTURE1);
+                gl.BindTexture(gl.TEXTURE_2D, 0);
                 gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 0);
             }
+        } else {
+            // No texture available at all
+            gl.ActiveTexture(gl.TEXTURE0);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.ActiveTexture(gl.TEXTURE1);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 0);
+            gl.Uniform4f(gl.GetUniformLocation(program, "defaultColor"), 0.4, 0.4, 0.4, 1.0); // Default shader
         }
 
         // Update transformations based on input state
