@@ -6,6 +6,7 @@ const std = @import("std");
 const gl = @import("gl");
 const zmath = @import("zmath");
 const math = @import("std").math;
+const zstbi = @import("zstbi");
 const glfw = @import("mach-glfw");
 
 const window = @import("./window/window.zig");
@@ -21,6 +22,11 @@ const c = @cImport({
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
+
+    // Zstbi initialization
+    zstbi.init(allocator);
+    zstbi.setFlipVerticallyOnLoad(true);
+    //defer zstbi.deinit();
 
     // GLFW initialization
     if (!glfw.init(.{})) {
@@ -64,6 +70,9 @@ pub fn main() !void {
         gl.ClearColor(1.0, 1.0, 1.0, 1.0); // Clear the screen to white
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+        // Handle material visibility
+        handleMaterialVisibility(program, &state);
+
         // Update transformations based on input state
         updateTransforms(&rotation, &translation, &scale, &state);
 
@@ -81,9 +90,24 @@ pub fn main() !void {
             0.25 * math.pi,
             state.width / state.height,
             0.1, 100);
-        const mvp = zmath.mul(zmath.mul(scale, rotation), zmath.mul(translation, zmath.mul(view, proj)));
 
-        gl.UniformMatrix4fv(0, 1, gl.FALSE, &mvp[0][0]);
+        // Calculate separate model matrix for lighting calculations
+        const model = zmath.mul(zmath.mul(scale, rotation), translation);
+        const mvp = zmath.mul(model, zmath.mul(view, proj));
+
+        // Set matrices
+        gl.UniformMatrix4fv(gl.GetUniformLocation(program, "MVP"), 1, gl.FALSE, &mvp[0][0]);
+        gl.UniformMatrix4fv(gl.GetUniformLocation(program, "Model"), 1, gl.FALSE, &model[0][0]);
+
+        // Set lighting uniforms
+        const lightPos = zmath.f32x4(2.0, 2.0, 2.0, 1.0);
+        gl.Uniform3f(gl.GetUniformLocation(program, "lightPos"),
+            lightPos[0], lightPos[1], lightPos[2]);
+
+        const viewPos = zmath.f32x4(0.0, 0.0, 3.0, 1.0);
+        gl.Uniform3f(gl.GetUniformLocation(program, "viewPos"),
+            viewPos[0], viewPos[1], viewPos[2]);
+
         gl.BindVertexArray(mesh.loadedObject.vao);
         gl.DrawElements(gl.TRIANGLES, @intCast(mesh.loadedObject.index_count), gl.UNSIGNED_INT, 0);
 
@@ -94,10 +118,87 @@ pub fn main() !void {
     }
 }
 
+fn handleMaterialVisibility(program: c_uint, state: *window.WindowState) void {
+    const useTexture = mesh.loadedObject.object.materials.items.len > 0;
+    gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), @intFromBool(useTexture));
+
+    // Bind the shader program with texture
+    if (useTexture) {
+        const material = mesh.loadedObject.object.materials.items[0];
+        // Diffuse texture
+        if (material.textureId != 0 and state.overlayState.diffuseVisible) {
+            gl.ActiveTexture(gl.TEXTURE0);
+            gl.BindTexture(gl.TEXTURE_2D, material.textureId);
+            gl.Uniform1i(gl.GetUniformLocation(program, "textureDiffuse"), 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), 1);
+        } else {
+            // Default when diffuse texture is disabled or not available
+            gl.ActiveTexture(gl.TEXTURE0);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), 0);
+            gl.Uniform4f(gl.GetUniformLocation(program, "defaultColor"), 0.4, 0.4, 0.4, 1.0);
+        }
+
+        // Normal texture
+        if (material.normalMapId != 0 and state.overlayState.normalVisible) {
+            gl.ActiveTexture(gl.TEXTURE1);
+            gl.BindTexture(gl.TEXTURE_2D, material.normalMapId);
+            gl.Uniform1i(gl.GetUniformLocation(program, "textureNormal"), 1);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 1);
+        } else {
+            gl.ActiveTexture(gl.TEXTURE1);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 0);
+        }
+
+        // Roughness texture
+        gl.Uniform3f(gl.GetUniformLocation(program, "materialSpecular"),
+            material.specular[0], material.specular[1], material.specular[2]);
+        gl.Uniform1f(gl.GetUniformLocation(program, "roughness"), 0.5); // Default roughness
+        if (material.roughnessMapId != 0 and state.overlayState.roughnessVisible) {
+            gl.ActiveTexture(gl.TEXTURE2);
+            gl.BindTexture(gl.TEXTURE_2D, material.roughnessMapId);
+            gl.Uniform1i(gl.GetUniformLocation(program, "textureRoughness"), 2);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useRoughnessMap"), 1);
+        } else {
+            gl.ActiveTexture(gl.TEXTURE2);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useRoughnessMap"), 0);
+        }
+
+        // Metallic texture
+        gl.Uniform1f(gl.GetUniformLocation(program, "metallic"), 0.0); // Default metallic
+        if (material.metallicMapId != 0 and state.overlayState.metallicVisible) {
+            gl.ActiveTexture(gl.TEXTURE3);
+            gl.BindTexture(gl.TEXTURE_2D, material.metallicMapId);
+            gl.Uniform1i(gl.GetUniformLocation(program, "textureMetallic"), 3);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useMetallicMap"), 1);
+        } else {
+            gl.ActiveTexture(gl.TEXTURE3);
+            gl.BindTexture(gl.TEXTURE_2D, 0);
+            gl.Uniform1i(gl.GetUniformLocation(program, "useMetallicMap"), 0);
+        }
+
+    } else {
+        // Default shader
+        gl.ActiveTexture(gl.TEXTURE0);
+        gl.BindTexture(gl.TEXTURE_2D, 0);
+        gl.ActiveTexture(gl.TEXTURE1);
+        gl.BindTexture(gl.TEXTURE_2D, 0);
+        gl.Uniform1i(gl.GetUniformLocation(program, "useTexture"), 0);
+        gl.Uniform1i(gl.GetUniformLocation(program, "useNormalMap"), 0);
+        gl.Uniform4f(gl.GetUniformLocation(program, "defaultColor"), 0.4, 0.4, 0.4, 1.0); // Default shader
+    }
+}
+
 /// Update the rotation, translation, and scale matrices
 /// Values come from the window state (mouse and keyboard input from callbacks)
 fn updateTransforms(rotation: *zmath.Mat, translation: *zmath.Mat, scale: *zmath.Mat, state: *window.WindowState) void {
     if(state.overlayState.manualEdit) {
+        // Disable accidental input in background
+        state.keys = .none;
+        state.mouse.justPressed = true;
+
         updateTransformsOverlay(rotation, translation, scale, state);
     }
 
