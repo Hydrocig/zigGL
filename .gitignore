@@ -6,6 +6,8 @@
 /.zig-cache
 /zig-out
 
-/libs
+/libs/glfw
+/libs/imgui
+/libs/zmath/.zig-cache
 !/libs/cimgui.cpp
 !/libs/cimgui.h
