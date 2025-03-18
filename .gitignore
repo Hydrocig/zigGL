@@ -7,5 +7,12 @@
 /zig-out
 
 /libs
+/libs/zmath/.zig-cache
+
+!/libs/zmath/src/*
+!/libs/zmath/.zigversion
+!/libs/zmath/build.zig
+!/libs/zmath/build.zig.zon
+
 !/libs/cimgui.cpp
 !/libs/cimgui.h
