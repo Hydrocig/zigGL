@@ -258,7 +258,6 @@ pub fn getMtlFilePath(object: *ObjectStruct, objPath: []const u8) ![]const u8 {
     // Build the final path as: objDir + "/" + mtlFilename
     var parts = [_][]const u8{ objDir, "/", mtlFilename };
     const finalPath = try std.mem.concat(object.allocator, u8, &parts);
-
     return finalPath;
 }
 
@@ -414,12 +413,7 @@ fn handleMetallicMapPath(content: []const u8, obj: *ObjectStruct) !void {
 }
 
 /// Load a texture from a file
-fn loadTextureFromFile(obj: *ObjectStruct, content: []const u8, components: u8) !struct {
-    image: zstbi.Image,
-    textureId: gl.uint,
-    path: []const u8
-}
-{
+fn loadTextureFromFile(obj: *ObjectStruct, content: []const u8, components: u8) !struct { image: zstbi.Image, textureId: gl.uint, path: []const u8 } {
     // Path building
     var texturePath: []const u8 = undefined;
     if (validator.fileExists(content)) {
@@ -427,9 +421,10 @@ fn loadTextureFromFile(obj: *ObjectStruct, content: []const u8, components: u8) 
     } else {
         texturePath = try std.fs.path.join(obj.allocator, &[_][]const u8{ objDir, content });
     }
+    const cleanPath = validator.trimString(texturePath);
 
     // Convert to null-terminated string
-    const texturePathZ = try obj.allocator.dupeZ(u8, texturePath);
+    const texturePathZ = try obj.allocator.dupeZ(u8, cleanPath);
     defer obj.allocator.free(texturePathZ);
 
     // Loading image
@@ -466,28 +461,13 @@ fn loadTextureFromFile(obj: *ObjectStruct, content: []const u8, components: u8) 
     }
 
     // Upload texture data to GPU
-    gl.TexImage2D(
-        gl.TEXTURE_2D,
-        0,
-        @intCast(format),
-        @intCast(image.width),
-        @intCast(image.height),
-        0,
-        format,
-        gl.UNSIGNED_BYTE,
-        image.data.ptr
-    );
+    gl.TexImage2D(gl.TEXTURE_2D, 0, @intCast(format), @intCast(image.width), @intCast(image.height), 0, format, gl.UNSIGNED_BYTE, image.data.ptr);
 
     // Save path from file
     const savedPath = try obj.allocator.dupe(u8, content);
 
-    return .{
-        .image = image,
-        .textureId = textureId,
-        .path = savedPath
-    };
+    return .{ .image = image, .textureId = textureId, .path = savedPath };
 }
-
 
 /// Add the object name to the object struct
 fn handleObjectName(content: []const u8, obj: *ObjectStruct) !void {
@@ -560,7 +540,7 @@ fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
     }
 
     const triangles = switch (numVertices) {
-        3 => &[_][3]usize{ .{ 0, 1, 2 } }, // Single triangle
+        3 => &[_][3]usize{.{ 0, 1, 2 }}, // Single triangle
         4 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 } }, // Quad → 2 triangles
         5 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 } }, // Pentagon → 3 triangles
         6 => &[_][3]usize{ .{ 0, 1, 2 }, .{ 0, 2, 3 }, .{ 0, 3, 4 }, .{ 0, 4, 5 } }, // Hexagon → 4 triangles
@@ -575,7 +555,7 @@ fn handleFace(content: []const u8, obj: *ObjectStruct) !void {
             std.log.err("Wrong Vertices amount for face: {d}", .{numVertices});
             std.log.err("CONTENT: {s}", .{content});
             return;
-        }
+        },
     };
 
     // Add each triangle to EBO
